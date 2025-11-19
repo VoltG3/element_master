@@ -1,6 +1,28 @@
-html, body {
+*, *::before, *::after {
+    box-sizing: border-box;
     margin: 0;
     padding: 0;
-    width: 100vw;
-    height: 100vh;
+}
+
+html, body, #root {
+    height: 100%;
+    width: 100%;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    line-height: 1.5;
+}
+
+#root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+@supports (min-height: 100dvh) {
+    #root {
+        min-height: 100dvh; /* dynamic viewport height for mobile */
+    }
 }

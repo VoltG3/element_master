@@ -7,9 +7,9 @@ import { configureStore } from '@reduxjs/toolkit'
 import './i18n/i18n'
 import './index.css'
 import App from './App'
-import Home from "./sections/home"
-import Game from "./sections/game"
-import Editor from "./sections/editor"
+import Home from "./sections/chapters/home"
+import Game from "./sections/chapters/game"
+import Editor from "./sections/chapters/editor"
 
 const store = configureStore({
     reducer: reducer,
