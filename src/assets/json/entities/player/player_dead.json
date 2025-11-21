@@ -1,0 +1,17 @@
+{
+  "id": "player_dead",
+  "name": "entities.player",
+  "textures": [
+    "/assets/images/entities/player/player_dead_01.png",
+    "/assets/images/entities/player/player_dead_02.png",
+    "/assets/images/entities/player/player_dead_03.png",
+    "/assets/images/entities/player/player_dead_04.png",
+    "/assets/images/entities/player/player_dead_05.png",
+    "/assets/images/entities/player/player_dead_06.png",
+    "/assets/images/entities/player/player_dead_07.png",
+    "/assets/images/entities/player/player_dead_08.png",
+    "/assets/images/entities/player/player_dead_09.png",
+    "/assets/images/entities/player/player_dead_10.png"
+  ],
+  "animationSpeed": 300
+}

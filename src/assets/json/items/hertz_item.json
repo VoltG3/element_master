@@ -1,0 +1,9 @@
+{
+  "id": "hertz_item",
+  "name": "item.hertz",
+  "textures": [
+    "/assets/images/items/hertz_item.A.png",
+    "/assets/images/items/hertz_item.B.png"
+  ],
+  "animationSpeed": 300
+}

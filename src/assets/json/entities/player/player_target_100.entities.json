@@ -1,0 +1,9 @@
+{
+  "id": "player_target_100",
+  "name": "entities.player",
+  "textures": [
+    "/assets/images/entities/player/player_target_100.A.png",
+    "/assets/images/entities/player/player_target_100.B.png"
+  ],
+  "animationSpeed": 500
+}
