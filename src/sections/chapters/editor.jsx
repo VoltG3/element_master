@@ -30,17 +30,26 @@ export const Editor = () => {
     const registryItems = Array.isArray(GameRegistry) ? GameRegistry : [];
 
     const blocks = registryItems.filter(item => item.name && item.name.startsWith('block.'));
-    const entities = registryItems.filter(item => item.name && item.name.startsWith('entities.'));
+    
+    // 2. Entities filtrēšana - parādīt tikai tās, kurām type="default" vai nav norādīts type
+    const entities = registryItems.filter(item => {
+        if (!item.name || !item.name.startsWith('entities.')) return false;
+        // Ja 'type' nav definēts, pieņemam ka tas ir defaultais (lai vecie json strādātu)
+        // Ja 'type' ir definēts, tam jābūt 'default'
+        return !item.type || item.type === 'default';
+    });
+    
     const items = registryItems.filter(item => item.name && item.name.startsWith('item.'));
 
     // Stili
-    const buttonStyle = {
+    const baseButtonStyle = {
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
         cursor: 'pointer',
         border: '1px solid #333',
-        padding: '4px 8px',
+        padding: '0 10px', // Horizontālais padding
+        height: '28px',    // Fiksēts augstums visām pogām
         backgroundColor: '#e0e0e0',
         marginRight: '5px',
         marginBottom: '5px',
@@ -48,10 +57,22 @@ export const Editor = () => {
         color: '#000',
         borderRadius: '3px',
         userSelect: 'none',
-        minWidth: '30px'
+        minWidth: '30px',
+        boxSizing: 'border-box', // Svarīgi, lai border neietekmētu izmēru
+        textDecoration: 'none',
+        lineHeight: 'normal'
     };
 
-    const activeButtonStyle = { ...buttonStyle, backgroundColor: '#aaa', borderColor: '#000', fontWeight: 'bold' };
+    const buttonStyle = { ...baseButtonStyle };
+    const activeButtonStyle = { ...baseButtonStyle, backgroundColor: '#aaa', borderColor: '#000', fontWeight: 'bold' };
+
+    // Funkcija kartes notīrīšanai
+    const clearMap = () => {
+         if (window.confirm("Are you sure you want to clear the map?")) {
+             const emptyMap = Array(mapWidth * mapHeight).fill(null);
+             setCurrentMapData(emptyMap);
+         }
+    };
 
     const saveMap = () => {
         const mapData = {
@@ -297,6 +318,7 @@ export const Editor = () => {
                             <input type="file" accept=".json,.txt" onChange={loadMap} style={{display: 'none'}} />
                         </label>
                         <button onClick={() => setShowGrid(!showGrid)} style={showGrid ? activeButtonStyle : buttonStyle}>#</button>
+                        <button onClick={clearMap} style={{...buttonStyle, color: 'red'}} title="Clear Map">✕</button>
                     </div>
 
                     <div style={{borderTop: '1px solid #ddd', paddingTop: '10px', marginBottom: '10px'}}>
