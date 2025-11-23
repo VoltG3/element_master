@@ -1,5 +1,7 @@
 {
   "id": "dirt_block_0001",
   "name": "block.dirt",
+  "width": "1",
+  "height": "1",
   "texture": "/assets/images/blocks/dirt_block_0001.png"
 }

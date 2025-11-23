@@ -1,6 +1,8 @@
 {
   "id": "hertz_item",
   "name": "item.hertz",
+  "width": "1",
+  "height": "1",
   "textures": [
     "/assets/images/items/hertz_item.A.png",
     "/assets/images/items/hertz_item.B.png"
