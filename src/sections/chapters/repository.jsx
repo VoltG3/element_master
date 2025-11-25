@@ -1,22 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getRegistry } from '../../GameRegistry';
-
-// Maza komponente animācijai
-const AnimatedItem = ({ textures, speed, style, alt }) => {
-    const [index, setIndex] = useState(0);
-
-    useEffect(() => {
-        if (!textures || textures.length <= 1) return;
-
-        const interval = setInterval(() => {
-            setIndex((prevIndex) => (prevIndex + 1) % textures.length);
-        }, speed || 500); // Noklusējuma ātrums 500ms
-
-        return () => clearInterval(interval);
-    }, [textures, speed]);
-
-    return <img src={textures[index]} alt={alt} style={style} />;
-};
+import AnimatedItem from '../../utilites/AnimatedItem';
 
 export default function Repository() {
     const registryItems = getRegistry();
@@ -64,10 +48,11 @@ export default function Repository() {
                     
                     {/* Izvēlamies: Animācija vai Parasta bilde */}
                     {item.textures && item.textures.length > 0 ? (
-                        <AnimatedItem 
-                            textures={item.textures} 
-                            speed={item.animationSpeed} 
-                            style={imageStyle} 
+                        <AnimatedItem
+                            textures={item.textures}
+                            texture={item.texture}
+                            speed={item.animationSpeed}
+                            style={imageStyle}
                             alt={item.name}
                         />
                     ) : (
