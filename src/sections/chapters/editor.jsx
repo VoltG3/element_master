@@ -58,6 +58,7 @@ export const Editor = () => {
     const blocks = registryItems.filter(item => item.name && item.name.startsWith('block.'));
     const entities = registryItems.filter(item => { if (!item.name || !item.name.startsWith('entities.')) return false; return !item.type || item.type === 'default'; });
     const items = registryItems.filter(item => item.name && item.name.startsWith('item.'));
+    const hazards = registryItems.filter(item => item.type === 'hazard');
 
     const baseButtonStyle = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '1px solid #333', padding: '0 10px', height: '28px', backgroundColor: '#e0e0e0', marginRight: '5px', marginBottom: '5px', fontSize: '13px', color: '#000', borderRadius: '3px', userSelect: 'none', minWidth: '30px', boxSizing: 'border-box', textDecoration: 'none', lineHeight: 'normal' };
     const buttonStyle = { ...baseButtonStyle };
@@ -461,6 +462,12 @@ export const Editor = () => {
                         <PaletteSection title="Blocks (Background)" isOpenDefault={true}> <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}> {blocks.map(b => renderPaletteItem(b, 'blue', 'tile'))} </div> </PaletteSection>
                         <PaletteSection title="Entities (Objects)"> <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}> {entities.map(e => renderPaletteItem(e, 'red', 'object'))} </div> </PaletteSection>
                         <PaletteSection title="Items (Objects)"> <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}> {items.map(i => renderPaletteItem(i, 'green', 'object'))} </div> </PaletteSection>
+                         {/* JAUNS: Hazards sadaļa */}
+                         <PaletteSection title="Hazards (Objects)">
+                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                 {hazards.map(h => renderPaletteItem(h, 'orange', 'object'))}
+                             </div>
+                         </PaletteSection>
                     </div>
                     {/* ... Stats ... */}
                      <div style={{ marginTop: 'auto', paddingTop: '10px', borderTop: '1px solid #ccc', fontSize: '11px', backgroundColor: '#eee', padding: '10px' }}> <div style={{marginBottom: '4px'}}>Size: <strong>{mapWidth} x {mapHeight}</strong> ({totalTiles} tiles)</div> <div style={{marginBottom: '4px', color: 'blue'}}>🟦 Filled Blocks: <strong>{filledBlocks}</strong></div> <div style={{marginBottom: '4px', color: '#666'}}>⬜ Empty Blocks: <strong>{emptyBlocks}</strong></div> <div style={{marginBottom: '4px', color: 'red'}}>🟥 Objects Count: <strong>{objectsCount}</strong></div> </div>

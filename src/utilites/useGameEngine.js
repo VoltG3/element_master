@@ -6,248 +6,438 @@ const TILE_SIZE = 32;
 const GRAVITY = 0.6;
 const TERMINAL_VELOCITY = 12;
 const MOVE_SPEED = 4;
-    const JUMP_FORCE = 10;
-    const MAX_HEALTH = 100; // Maksimālā veselība
+const JUMP_FORCE = 10;
+const MAX_HEALTH = 100; // Maksimālā veselība
 
-    // Izmainīts arguments: pievienots objectData
-    export const useGameEngine = (mapData, tileData, objectData, registryItems, onGameOver, onStateUpdate) => {
-        const input = useInput();
+// Izmainīts arguments: pievienots objectData
+export const useGameEngine = (mapData, tileData, objectData, registryItems, onGameOver, onStateUpdate) => {
+    const input = useInput();
 
-        // Spēlētāja stāvoklis
-        const [player, setPlayer] = useState({
-            x: 0, // Pikseļos
-            y: 0, // Pikseļos
-            width: 32, // Noklusējums, tiks pārrakstīts no reģistra
-            height: 32,
-            vx: 0,
-            vy: 0,
-            isGrounded: false,
-            direction: 1, // 1 pa labi, -1 pa kreisi
-            animation: 'idle', // idle, run, jump
-            health: 90 // Sākotnējā veselība (testam, lai var paņemt sirdi)
-        });
+    // Spēlētāja stāvoklis
+    const [player, setPlayer] = useState({
+        x: 0, // Pikseļos
+        y: 0, // Pikseļos
+        width: 32, // Noklusējums, tiks pārrakstīts no reģistra
+        height: 32,
+        vx: 0,
+        vy: 0,
+        isGrounded: false,
+        direction: 1, // 1 pa labi, -1 pa kreisi
+        animation: 'idle', // idle, run, jump
+        health: 90 // Sākotnējā veselība (testam, lai var paņemt sirdi)
+    });
 
-        const gameState = useRef({ ...player }); // Izmantojam ref lai izvairītos no closure problēmām loopā
-        const requestRef = useRef();
-        const isInitialized = useRef(false);
+    // Ref objekti spēles loģikai
+    const gameState = useRef({ ...player });               // Spēlētāja stāvoklis loopam (izvairās no closure problēmām)
+    const requestRef = useRef();                           // requestAnimationFrame id
+    const isInitialized = useRef(false);                   // Vai spēle ir inicializēta
+    const lastTimeRef = useRef(0);                         // Laiks starp frame'iem (δt)
+    const hazardDamageAccumulatorRef = useRef(0);          // Uzkrātais laiks hazard damage laika gaitā
+    const lastHazardIndexRef = useRef(null);               // Pēdējā hazard tile indeksa cache (lai saistītu damage ar konkrētu hazard)
+    const triggeredHazardsRef = useRef(new Set());         // Hazardi ar damageOnce: true, kuri jau ir nostrādājuši
 
-        // Inicializējam spēlētāju sākuma pozīcijā
-        // Svarīgi: Šis efekts tagad ir atkarīgs TIKAI no mapData (kurš nemainās, kad savāc itemu)
-        useEffect(() => {
-            // JAUNS: Resetojam inicializācijas karogu un apturam loopu, kamēr meklējam jaunu pozīciju
-            isInitialized.current = false;
+    // Inicializējam spēlētāju sākuma pozīcijā
+    // Svarīgi: Šis efekts tagad ir atkarīgs TIKAI no mapData (kurš nemainās, kad savāc itemu)
+    useEffect(() => {
+        // Resetējam hazard stāvokli, kad nomainās karte
+        isInitialized.current = false;
+        lastTimeRef.current = 0;
+        hazardDamageAccumulatorRef.current = 0;
+        lastHazardIndexRef.current = null;
+        triggeredHazardsRef.current = new Set();
 
-            if (mapData && mapData.layers) {
-                const objLayer = mapData.layers.find(l => l.name === 'entities');
-                if (objLayer) {
-                    // Meklējam spēlētāju (jebko kas satur 'player')
-                    const startIndex = objLayer.data.findIndex(id => id && id.includes('player'));
+        if (mapData && mapData.layers) {
+            const objLayer = mapData.layers.find(l => l.name === 'entities');
+            if (objLayer) {
+                // Meklējam spēlētāju (jebko kas satur 'player')
+                const startIndex = objLayer.data.findIndex(id => id && id.includes('player'));
 
-                    if (startIndex !== -1) {
-                        const startX = (startIndex % mapData.meta.width) * TILE_SIZE;
-                        const startY = Math.floor(startIndex / mapData.meta.width) * TILE_SIZE;
+                if (startIndex !== -1) {
+                    const startX = (startIndex % mapData.meta.width) * TILE_SIZE;
+                    const startY = Math.floor(startIndex / mapData.meta.width) * TILE_SIZE;
 
-                        // Iegūstam datus no registry
-                        const playerId = objLayer.data[startIndex];
-                        const registryPlayer = findItemById(playerId) || findItemById("player"); // Fallback uz generic player
+                    // Iegūstam datus no registry
+                    const playerId = objLayer.data[startIndex];
+                    const registryPlayer = findItemById(playerId) || findItemById("player"); // Fallback uz generic player
 
-                        // JAUNS: Pilnībā pārrakstām gameState ar noklusētajām vērtībām + jauno pozīciju
-                        gameState.current = {
-                            x: startX,
-                            y: startY,
-                            width: (registryPlayer?.width || 1) * TILE_SIZE * 0.8,
-                            height: (registryPlayer?.height || 1) * TILE_SIZE,
-                            vx: 0,
-                            vy: 0,
-                            isGrounded: false,
-                            direction: 1,
-                            animation: 'idle',
-                            health: 90 // Resetojam uz 90 (nevis MAX), lai var testēt itemus
-                        };
+                    // Pilnībā pārrakstām gameState ar noklusētajām vērtībām + jauno pozīciju
+                    gameState.current = {
+                        x: startX,
+                        y: startY,
+                        width: (registryPlayer?.width || 1) * TILE_SIZE * 0.8,
+                        height: (registryPlayer?.height || 1) * TILE_SIZE,
+                        vx: 0,
+                        vy: 0,
+                        isGrounded: false,
+                        direction: 1,
+                        animation: 'idle',
+                        health: 90 // Resetojam uz 90 (nevis MAX), lai var testēt itemus
+                    };
 
-                        setPlayer(gameState.current);
-                        isInitialized.current = true;
-                    } else {
-                        // Ja spēlētājs nav atrasts kartē, novietojam to 0,0 vai kādā drošā vietā
-                        // Tas novērš veco koordinātu saglabāšanos
-                        gameState.current = {
-                            ...gameState.current,
-                            x: 0,
-                            y: 0,
-                            vx: 0,
-                            vy: 0
-                        };
-                        setPlayer(gameState.current);
-                    }
+                    setPlayer(gameState.current);
+                    isInitialized.current = true;
+                } else {
+                    // Ja spēlētājs nav atrasts kartē, novietojam to 0,0 vai kādā drošā vietā
+                    gameState.current = {
+                        ...gameState.current,
+                        x: 0,
+                        y: 0,
+                        vx: 0,
+                        vy: 0
+                    };
+                    setPlayer(gameState.current);
                 }
             }
-        }, [mapData]); // Šeit mapData ir tas, kas nāk no faila, un tas nemainās spēles laikā
+        }
+    }, [mapData]);
 
-        // Palīgfunkcija sadursmēm (AABB Collision)
-        const checkCollision = (newX, newY, mapWidth) => {
-            // ... existing code ...
-            const points = [
-                { x: newX, y: newY }, // Top Left
-                { x: newX + gameState.current.width - 0.01, y: newY }, // Top Right
-                { x: newX, y: newY + gameState.current.height - 0.01 }, // Bottom Left
-                { x: newX + gameState.current.width - 0.01, y: newY + gameState.current.height - 0.01 } // Bottom Right
-            ];
+    // Palīgfunkcija sadursmēm (AABB Collision) ar blokiem (tile slānis)
+    const checkCollision = (newX, newY, mapWidth) => {
+        const points = [
+            { x: newX, y: newY }, // Top Left
+            { x: newX + gameState.current.width - 0.01, y: newY }, // Top Right
+            { x: newX, y: newY + gameState.current.height - 0.01 }, // Bottom Left
+            { x: newX + gameState.current.width - 0.01, y: newY + gameState.current.height - 0.01 } // Bottom Right
+        ];
 
-            for (let p of points) {
-                // Konvertējam pikseļus uz Grid koordinātām
-                const gridX = Math.floor(p.x / TILE_SIZE);
-                const gridY = Math.floor(p.y / TILE_SIZE);
-                const index = gridY * mapWidth + gridX;
-
-                // Pārbaudām vai ārpus kartes (tikai horizontāli un virs kartes)
-                // JAUNS: Atļaujam krist uz leju (gridY >= mapHeight), lai varētu nomirt
-                if (gridX < 0 || gridX >= mapWidth || gridY < 0) return true;
-
-                // Ja esam zem kartes, tā nav sadursme, tas ir kritiens
-                if (gridY >= mapData.meta.height) continue;
-
-                const tileId = tileData[index];
-                if (tileId) {
-                    const tileDef = registryItems.find(r => r.id === tileId);
-                    // Ja blokam ir definēta sadursme
-                    if (tileDef && tileDef.collision) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        };
-
-        // JAUNS: Pārbauda priekšmetu savākšanu
-        const checkItemCollection = (currentX, currentY, mapWidth, objectLayerData) => {
-            if (!objectLayerData) return;
-
-            // Pārbaudām spēlētāja centru
-            const centerX = currentX + gameState.current.width / 2;
-            const centerY = currentY + gameState.current.height / 2;
-
-            const gridX = Math.floor(centerX / TILE_SIZE);
-            const gridY = Math.floor(centerY / TILE_SIZE);
+        for (let p of points) {
+            // Konvertējam pikseļus uz Grid koordinātām
+            const gridX = Math.floor(p.x / TILE_SIZE);
+            const gridY = Math.floor(p.y / TILE_SIZE);
             const index = gridY * mapWidth + gridX;
 
-            // Pārbaude vai indekss ir derīgs
-            if (index < 0 || index >= objectLayerData.length) return;
+            // Pārbaudām vai ārpus kartes (tikai horizontāli un virs kartes)
+            // Atļaujam krist uz leju (gridY >= mapHeight), lai varētu nomirt
+            if (gridX < 0 || gridX >= mapWidth || gridY < 0) return true;
 
-            const itemId = objectLayerData[index];
-            if (itemId) {
-                const itemDef = registryItems.find(r => r.id === itemId);
+            // Ja esam zem kartes, tā nav sadursme, tas ir kritiens
+            if (gridY >= mapData.meta.height) continue;
 
-                // Ja tas ir "pickup" items un nav spēlētājs
-                if (itemDef && itemDef.pickup && !itemId.includes('player')) {
+            const tileId = tileData[index];
+            if (tileId) {
+                const tileDef = registryItems.find(r => r.id === tileId);
+                // Ja blokam ir definēta sadursme
+                if (tileDef && tileDef.collision) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
 
-                    // Loģika specifiskiem itemiem
-                    if (itemDef.effect && itemDef.effect.health) {
-                        const healthBonus = parseInt(itemDef.effect.health, 10);
+    // JAUNS: Pārbauda priekšmetu savākšanu
+    const checkItemCollection = (currentX, currentY, mapWidth, objectLayerData) => {
+        if (!objectLayerData) return;
 
-                        // Ja dzīvība ir pilna, nevaram paņemt
-                        if (gameState.current.health >= MAX_HEALTH) {
-                            return;
-                        }
+        // Pārbaudām spēlētāja centru
+        const centerX = currentX + gameState.current.width / 2;
+        const centerY = currentY + gameState.current.height / 2;
 
-                        // Ja varam paņemt
-                        const newHealth = Math.min(gameState.current.health + healthBonus, MAX_HEALTH);
-                        gameState.current.health = newHealth;
+        const gridX = Math.floor(centerX / TILE_SIZE);
+        const gridY = Math.floor(centerY / TILE_SIZE);
+        const index = gridY * mapWidth + gridX;
 
-                        // Paziņojam, ka items ir savākts (lai to izdzēstu no kartes)
-                        if (onStateUpdate) {
-                            onStateUpdate('collectItem', index);
-                        }
+        // Pārbaude vai indekss ir derīgs
+        if (index < 0 || index >= objectLayerData.length) return;
+
+        const itemId = objectLayerData[index];
+        if (itemId) {
+            const itemDef = registryItems.find(r => r.id === itemId);
+
+            // Ja tas ir "pickup" items un nav spēlētājs
+            if (itemDef && itemDef.pickup && !itemId.includes('player')) {
+
+                // Loģika specifiskiem itemiem
+                if (itemDef.effect && itemDef.effect.health) {
+                    const healthBonus = parseInt(itemDef.effect.health, 10);
+
+                    // Ja dzīvība ir pilna, nevaram paņemt
+                    if (gameState.current.health >= MAX_HEALTH) {
+                        return;
+                    }
+
+                    // Ja varam paņemt
+                    const newHealth = Math.min(gameState.current.health + healthBonus, MAX_HEALTH);
+                    gameState.current.health = newHealth;
+
+                    // Paziņojam, ka items ir savākts (lai to izdzēstu no kartes)
+                    if (onStateUpdate) {
+                        onStateUpdate('collectItem', index);
                     }
                 }
             }
+        }
+    };
+
+    // 🧨 JAUNS: Hazard apstrāde (damageOnce, damagePerSecond, damageDirections)
+    const checkHazardDamage = (currentX, currentY, mapWidth, objectLayerData, deltaMs) => {
+        if (!objectLayerData) {
+            hazardDamageAccumulatorRef.current = 0;
+            lastHazardIndexRef.current = null;
+            return;
+        }
+
+        const width = gameState.current.width;
+        const height = gameState.current.height;
+
+        // Ņemam spēlētāja "apakšas centru" (stāv uz kaut kā)
+        const bottomCenterX = currentX + width / 2;
+        const bottomCenterY = currentY + height - 1;
+
+        const gridX = Math.floor(bottomCenterX / TILE_SIZE);
+        const gridY = Math.floor(bottomCenterY / TILE_SIZE);
+        const index = gridY * mapWidth + gridX;
+
+        // Indeša pārbaude
+        if (index < 0 || index >= objectLayerData.length) {
+            hazardDamageAccumulatorRef.current = 0;
+            lastHazardIndexRef.current = null;
+            return;
+        }
+
+        const objId = objectLayerData[index];
+        if (!objId) {
+            hazardDamageAccumulatorRef.current = 0;
+            lastHazardIndexRef.current = null;
+            return;
+        }
+
+        const objDef = registryItems.find(r => r.id === objId);
+        if (!objDef || objDef.type !== 'hazard') {
+            hazardDamageAccumulatorRef.current = 0;
+            lastHazardIndexRef.current = null;
+            return;
+        }
+
+        // Aprēķinam relāciju starp spēlētāju un hazard tile (virziens no kā nāk damage)
+        const playerLeft = currentX;
+        const playerRight = currentX + width;
+        const playerTop = currentY;
+        const playerBottom = currentY + height;
+
+        const tileLeft = gridX * TILE_SIZE;
+        const tileRight = tileLeft + TILE_SIZE;
+        const tileTop = gridY * TILE_SIZE;
+        const tileBottom = tileTop + TILE_SIZE;
+
+        // Vai vispār pārklājas horizontāli/vertikāli (drošībai)
+        const overlapsHorizontally = playerRight > tileLeft && playerLeft < tileRight;
+        const overlapsVertically = playerBottom > tileTop && playerTop < tileBottom;
+        if (!overlapsHorizontally || !overlapsVertically) {
+            hazardDamageAccumulatorRef.current = 0;
+            lastHazardIndexRef.current = null;
+            return;
+        }
+
+        // Virzienu noteikšana (kādā pusē spēlētājs atrodas attiecībā pret hazardu)
+        const touchingTop = playerBottom <= tileTop + 4 && playerBottom >= tileTop;       // Spēlētājs stāv virsū
+        const touchingBottom = playerTop >= tileBottom - 4 && playerTop <= tileBottom;    // Spēlētājs ir zem hazard
+        const touchingLeft = playerRight <= tileRight && playerRight >= tileRight - 4;    // Spēlētājs ir pa kreisi
+        const touchingRight = playerLeft >= tileLeft && playerLeft <= tileLeft + 4;       // Spēlētājs ir pa labi
+
+        // damageDirections: ja nav definēts, uzskatām, ka hazard dara damage no visām pusēm
+        const dirs = objDef.damageDirections || {
+            top: true,
+            bottom: true,
+            left: true,
+            right: true
         };
 
-        // Game Loop
-        const update = () => {
-            if (!isInitialized.current || !mapData) return;
+        const dirOK =
+            (touchingTop && dirs.top) ||
+            (touchingBottom && dirs.bottom) ||
+            (touchingLeft && dirs.left) ||
+            (touchingRight && dirs.right);
 
-            const mapWidth = mapData.meta.width;
-            const keys = input.current;
-            let { x, y, vx, vy, width, height, isGrounded } = gameState.current;
+        if (!dirOK) {
+            // Nav “aktīvs” šajā virzienā → neresetojam triggeredHazards (once),
+            // bet neuzkrājam damagePerSecond.
+            hazardDamageAccumulatorRef.current = 0;
+            lastHazardIndexRef.current = null;
+            return;
+        }
 
-            // ... existing code (movement & collision) ...
-            // --- 1. Horizontālā kustība ---
-            vx = 0;
-            if (keys.a) {
-                vx = -MOVE_SPEED;
-                gameState.current.direction = -1;
-            }
-            if (keys.d) {
-                vx = MOVE_SPEED;
-                gameState.current.direction = 1;
-            }
+        // Tagad tiešām uzskatām, ka spēlētājs saņem hazard damage
+        lastHazardIndexRef.current = index;
 
-            // Pārbaudām horizontālo sadursmi
-            if (checkCollision(x + vx, y, mapWidth)) {
-                vx = 0; // Apstājamies, ja siena
-            }
-            x += vx;
+        const damageOnce = !!objDef.damageOnce;
+        const baseDamage = objDef.damage ?? 0;
+        const dps = objDef.damagePerSecond ?? baseDamage; // Ja nav dps, izmanto damage kā vienību sekundē
 
-            // --- 2. Vertikālā kustība (Gravitācija & Lēkšana) ---
+        // Vienreizējs damage (piemēram, lāpstiņa, kas tikai vienu reizi aizskar)
+        if (damageOnce) {
+            if (!triggeredHazardsRef.current.has(index)) {
+                triggeredHazardsRef.current.add(index);
 
-            // Lēkšana
-            if (keys.space && isGrounded) {
-                vy = -JUMP_FORCE;
-                isGrounded = false;
-            }
+                gameState.current.health = Math.max(0, gameState.current.health - baseDamage);
 
-            // Gravitācija
-            vy += GRAVITY;
-            if (vy > TERMINAL_VELOCITY) vy = TERMINAL_VELOCITY;
-
-            // Pārbaudām vertikālo sadursmi
-            // Pārbaudām nākotnes pozīciju
-            if (checkCollision(x, y + vy, mapWidth)) {
-                // Ja krītam uz leju (vy > 0), tātad zeme
-                if (vy > 0) {
-                    isGrounded = true;
-                    // "Pielīdzinām" pie Grid līnijas, lai neiegrimtu zemē
-                    y = Math.floor((y + vy + height) / TILE_SIZE) * TILE_SIZE - height;
+                // Neliels “pushback” efekts, lai justos, ka tiešām trāpīja
+                if (touchingTop) {
+                    // Ja uzkāpj virsū hazardam, drusku “atsperam” uz augšu
+                    gameState.current.vy = -JUMP_FORCE * 0.4;
+                } else if (touchingLeft) {
+                    gameState.current.vx = -MOVE_SPEED * 1.5;
+                } else if (touchingRight) {
+                    gameState.current.vx = MOVE_SPEED * 1.5;
                 }
-                // Ja lecam uz augšu (vy < 0), tātad griesti
-                else if (vy < 0) {
-                    y = Math.ceil((y + vy) / TILE_SIZE) * TILE_SIZE;
-                }
-                vy = 0;
-            } else {
-                isGrounded = false;
-                y += vy;
+
+                return; // once damage jau pielietots
+            }
+        } else {
+            // Damage laika gaitā (damagePerSecond)
+            hazardDamageAccumulatorRef.current += deltaMs;
+
+            // Ja spēlētājs vairs nav uz tā paša hazard, resetojam
+            if (lastHazardIndexRef.current !== index) {
+                hazardDamageAccumulatorRef.current = 0;
             }
 
-            // JAUNS: Pārbaudām itemu savākšanu pēc kustības
-            // Izmantojam objectData argumentu (kas ir dinamiskais state no game.jsx)
-            checkItemCollection(x, y, mapWidth, objectData);
-
-            // JAUNS: Game Over pārbaude - ja nokrīt zem kartes
-            const mapPixelHeight = mapData.meta.height * TILE_SIZE;
-            if (y > mapPixelHeight + 100) {
-                if (onGameOver) {
-                    onGameOver();
-                }
-                // Apturam loopu lai neizsauktu game over vairākas reizes
-                isInitialized.current = false;
+            // Kad uzkrātais laiks sasniedz 1 sekundi, uzliekam damage
+            const TICK_MS = 1000; // 1 sekunde
+            while (hazardDamageAccumulatorRef.current >= TICK_MS) {
+                hazardDamageAccumulatorRef.current -= TICK_MS;
+                gameState.current.health = Math.max(0, gameState.current.health - dps);
             }
+        }
+    };
 
-            // Atjaunojam state
-            gameState.current = { ...gameState.current, x, y, vx, vy, isGrounded };
+    // Game Loop
+    const update = (timestamp) => {
+        if (!isInitialized.current || !mapData) return;
 
-            // React state atjaunojam, lai notiktu renderēšana
-            // (Reālā spēlē renderētu canvas, bet React DOM vajag state)
+        // Aprēķinām delta laiku (ms) kopš pēdējā frame
+        if (!lastTimeRef.current) {
+            lastTimeRef.current = timestamp;
+        }
+        const deltaMs = timestamp - lastTimeRef.current;
+        lastTimeRef.current = timestamp;
+
+        const mapWidth = mapData.meta.width;
+        const keys = input.current;
+
+        let {
+            x,
+            y,
+            vx,
+            vy,
+            width,
+            height,
+            isGrounded,
+            direction,
+            animation,
+            health
+        } = gameState.current;
+
+        // --- 1. Horizontālā kustība ---
+        vx = 0;
+        if (keys.a) {
+            vx = -MOVE_SPEED;
+            direction = -1;
+        }
+        if (keys.d) {
+            vx = MOVE_SPEED;
+            direction = 1;
+        }
+
+        // Pārbaudām horizontālo sadursmi
+        if (checkCollision(x + vx, y, mapWidth)) {
+            vx = 0; // Apstājamies, ja siena
+        }
+        x += vx;
+
+        // --- 2. Vertikālā kustība (Gravitācija & Lēkšana) ---
+
+        // Lēkšana
+        if (keys.space && isGrounded) {
+            vy = -JUMP_FORCE;
+            isGrounded = false;
+            animation = 'jump';
+        }
+
+        // Gravitācija
+        vy += GRAVITY;
+        if (vy > TERMINAL_VELOCITY) vy = TERMINAL_VELOCITY;
+
+        // Pārbaudām vertikālo sadursmi
+        if (checkCollision(x, y + vy, mapWidth)) {
+            // Ja krītam uz leju (vy > 0), tātad zeme
+            if (vy > 0) {
+                isGrounded = true;
+                // "Pielīdzinām" pie Grid līnijas, lai neiegrimtu zemē
+                y = Math.floor((y + vy + height) / TILE_SIZE) * TILE_SIZE - height;
+                if (Math.abs(vx) > 0) {
+                    animation = 'run';
+                } else {
+                    animation = 'idle';
+                }
+            }
+            // Ja lecam uz augšu (vy < 0), tātad griesti
+            else if (vy < 0) {
+                y = Math.ceil((y + vy) / TILE_SIZE) * TILE_SIZE;
+            }
+            vy = 0;
+        } else {
+            isGrounded = false;
+            y += vy;
+            if (vy > 0) {
+                animation = 'fall';
+            }
+        }
+
+        // JAUNS: Pārbaudām itemu savākšanu pēc kustības
+        checkItemCollection(x, y, mapWidth, objectData);
+
+        // JAUNS: Pārbaudām hazard damage pēc kustības
+        checkHazardDamage(x, y, mapWidth, objectData, deltaMs);
+
+        // JAUNS: Game Over pārbaude pēc health (hazardi, u.c.)
+        if (gameState.current.health <= 0) {
+            gameState.current.health = 0;
             setPlayer({ ...gameState.current });
 
-            requestRef.current = requestAnimationFrame(update);
+            if (onGameOver) {
+                onGameOver();
+            }
+            // Apturam loopu, lai nešautu gameOver n-tās reizes
+            isInitialized.current = false;
+            return;
+        }
+
+        // JAUNS: Game Over pārbaude - ja nokrīt zem kartes
+        const mapPixelHeight = mapData.meta.height * TILE_SIZE;
+        if (y > mapPixelHeight + 100) {
+            if (onGameOver) {
+                onGameOver();
+            }
+            isInitialized.current = false;
+            return;
+        }
+
+        // Atjaunojam state ref
+        gameState.current = {
+            ...gameState.current,
+            x,
+            y,
+            vx,
+            vy,
+            isGrounded,
+            direction,
+            animation
+            // health paliek gameState.current.health, jo to mainījām hazard/item funkcijās
         };
 
-        // Mainām dependency array: tagad loop restartējas, ja mainās objectData
-        useEffect(() => {
-            requestRef.current = requestAnimationFrame(update);
-            return () => cancelAnimationFrame(requestRef.current);
-        }, [mapData, tileData, objectData]); // Restartējam loopu ja mainās karte vai objekti
+        // React state atjaunojam, lai notiktu renderēšana
+        setPlayer({ ...gameState.current });
 
-        return player;
+        // Nākamais frame
+        requestRef.current = requestAnimationFrame(update);
     };
+
+    // Loop inicializācija / restartēšana
+    useEffect(() => {
+        requestRef.current = requestAnimationFrame(update);
+        return () => cancelAnimationFrame(requestRef.current);
+    }, [mapData, tileData, objectData]); // Restartējam loopu ja mainās karte vai objekti
+
+    return player;
+};

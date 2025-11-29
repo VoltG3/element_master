@@ -1,0 +1,21 @@
+{
+  "id": "bushes_001",
+  "name": "hazard.bush",
+  "type": "hazard",
+  "width": 1,
+  "height": 1,
+  "texture": "/assets/images/hazards/bushes_001.png",
+  "collision": true,
+
+  "damage": 5,
+  "damageOnce": false,
+  "damagePerSecond": 5,
+
+  "damageDirections": {
+    "top": true,
+    "bottom": false,
+    "left": false,
+    "right": false
+  }
+}
+
