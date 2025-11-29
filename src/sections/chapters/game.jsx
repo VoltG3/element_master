@@ -15,7 +15,6 @@ const BUILT_IN_MAPS = [map1, map2, map3, map4];
 
 export default function Game() {
     const viewportRef = useRef(null);
-    const hasAutoScrolledRef = useRef(false);
     const [isModalOpen, setIsModalOpen] = useState(true);
     const [activeMapData, setActiveMapData] = useState(null);
 
@@ -72,23 +71,35 @@ export default function Game() {
     }, []);
     // --- END ENGINE ---
 
-    // Auto-scroll once to bring player into view on large maps
+    // Camera follow with horizontal dead-zone on large maps
     useEffect(() => {
         const vp = viewportRef.current;
         if (!vp || !activeMapData || isModalOpen) return;
-        if (hasAutoScrolledRef.current) return;
-        const px = Number(playerState?.x);
-        const py = Number(playerState?.y);
-        if (!Number.isFinite(px) || !Number.isFinite(py)) return;
-        const contentWidth = mapWidth * 32;
-        const contentHeight = mapHeight * 32;
+
         const vw = vp.clientWidth || 0;
-        const vh = vp.clientHeight || 0;
-        const targetLeft = Math.max(0, Math.min(contentWidth - vw, px - vw / 2));
-        const targetTop = Math.max(0, Math.min(contentHeight - vh, py - vh / 2));
-        vp.scrollTo({ left: targetLeft, top: targetTop, behavior: 'auto' });
-        hasAutoScrolledRef.current = true;
-    }, [activeMapData, playerState, mapWidth, mapHeight, isModalOpen]);
+        const contentWidth = mapWidth * 32;
+        const maxScrollLeft = Math.max(0, contentWidth - vw);
+
+        const px = Number(playerState?.x) || 0;
+        const pw = Number(playerState?.width) || 32;
+        const playerCenter = px + pw / 2;
+
+        const currentLeft = vp.scrollLeft || 0;
+        const deadLeft = currentLeft + vw * 0.3;
+        const deadRight = currentLeft + vw * 0.7;
+
+        let targetLeft = currentLeft;
+        if (playerCenter > deadRight) {
+            targetLeft = playerCenter - vw * 0.7;
+        } else if (playerCenter < deadLeft) {
+            targetLeft = playerCenter - vw * 0.3;
+        }
+        targetLeft = Math.max(0, Math.min(maxScrollLeft, targetLeft));
+
+        if (Math.abs(targetLeft - currentLeft) > 0.5) {
+            vp.scrollTo({ left: targetLeft, top: 0, behavior: 'auto' });
+        }
+    }, [playerState, activeMapData, isModalOpen, mapWidth]);
 
     // JAUNS: Klausāmies navigācijas pogas
     useEffect(() => {
@@ -98,7 +109,6 @@ export default function Game() {
     }, []);
 
     const loadMapData = (mapData) => {
-        hasAutoScrolledRef.current = false;
         if (!mapData) return;
 
         const w = mapData.meta?.width || mapData.width || 20;
@@ -191,7 +201,7 @@ export default function Game() {
             )}
 
             <div ref={viewportRef} style={{ 
-                height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'auto',
+                height: '100%', display: 'block', overflow: 'auto',
                 filter: isModalOpen ? 'blur(5px)' : 'none', pointerEvents: isModalOpen ? 'none' : 'auto', transition: 'filter 0.3s ease'
             }}>
                 {activeMapData ? (
