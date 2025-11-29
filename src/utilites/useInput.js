@@ -11,11 +11,35 @@ export const useInput = () => {
 
     useEffect(() => {
         const handleKeyDown = (e) => {
+            // Prevent browser scrolling / focus hijack for game controls
             switch (e.code) {
-                case 'KeyW': keys.current.w = true; break;
-                case 'KeyA': keys.current.a = true; break;
-                case 'KeyS': keys.current.s = true; break;
-                case 'KeyD': keys.current.d = true; break;
+                case 'KeyW':
+                case 'ArrowUp':
+                case 'KeyA':
+                case 'ArrowLeft':
+                case 'KeyS':
+                case 'ArrowDown':
+                case 'KeyD':
+                case 'ArrowRight':
+                case 'Space':
+                    if (typeof e.preventDefault === 'function') e.preventDefault();
+                    break;
+                default:
+                    break;
+            }
+            switch (e.code) {
+                case 'KeyW':
+                case 'ArrowUp':
+                    keys.current.w = true; break;
+                case 'KeyA':
+                case 'ArrowLeft':
+                    keys.current.a = true; break;
+                case 'KeyS':
+                case 'ArrowDown':
+                    keys.current.s = true; break;
+                case 'KeyD':
+                case 'ArrowRight':
+                    keys.current.d = true; break;
                 case 'Space': keys.current.space = true; break;
                 default: break;
             }
@@ -23,21 +47,30 @@ export const useInput = () => {
 
         const handleKeyUp = (e) => {
             switch (e.code) {
-                case 'KeyW': keys.current.w = false; break;
-                case 'KeyA': keys.current.a = false; break;
-                case 'KeyS': keys.current.s = false; break;
-                case 'KeyD': keys.current.d = false; break;
+                case 'KeyW':
+                case 'ArrowUp':
+                    keys.current.w = false; break;
+                case 'KeyA':
+                case 'ArrowLeft':
+                    keys.current.a = false; break;
+                case 'KeyS':
+                case 'ArrowDown':
+                    keys.current.s = false; break;
+                case 'KeyD':
+                case 'ArrowRight':
+                    keys.current.d = false; break;
                 case 'Space': keys.current.space = false; break;
                 default: break;
             }
         };
 
-        window.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('keyup', handleKeyUp);
+        // non-passive to allow preventDefault on Space/Arrow keys
+        window.addEventListener('keydown', handleKeyDown, { passive: false });
+        window.addEventListener('keyup', handleKeyUp, { passive: false });
 
         return () => {
-            window.removeEventListener('keydown', handleKeyDown);
-            window.removeEventListener('keyup', handleKeyUp);
+            window.removeEventListener('keydown', handleKeyDown, { passive: false });
+            window.removeEventListener('keyup', handleKeyUp, { passive: false });
         };
     }, []);
 

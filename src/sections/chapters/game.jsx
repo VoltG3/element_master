@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import GameRegistry, { findItemById } from '../../GameRegistry'; // Pievienojam findItemById
-import AnimatedItem from '../../utilites/AnimatedItem';
+import PixiStage from './PixiStage';
 import { useGameEngine } from '../../utilites/useGameEngine'; // Importējam dzinēju
 import GameHeader from './gameHeader'; // JAUNS
 
@@ -181,72 +181,17 @@ export default function Game() {
                         border: '5px solid #222', boxShadow: '0 0 20px rgba(0,0,0,0.5)', backgroundColor: '#111'
                     }}>
                     
-                        {/* 1. BACKGROUND GRID */}
-                        <div style={{ 
-                            display: 'grid', 
-                            gridTemplateColumns: `repeat(${mapWidth}, 32px)`, 
-                            gridTemplateRows: `repeat(${mapHeight}, 32px)`,
-                            position: 'absolute', top: 0, left: 0
-                        }}>
-                                {Array(mapWidth * mapHeight).fill(0).map((_, index) => {
-                                const tileId = tileMapData[index];
-                                const tileObj = tileId ? registryItems.find(r => r.id === tileId) : null;
-                                return (
-                                    <div key={index} style={{ width: '32px', height: '32px', position: 'relative' }}>
-                                        {tileObj && <AnimatedItem 
-                                            textures={tileObj.textures} texture={tileObj.texture} speed={tileObj.animationSpeed}
-                                            style={{ position:'absolute', width: '100%', height: '100%', objectFit: 'contain' }} 
-                                        />}
-                                    </div>
-                                );
-                            })}
-                        </div>
-
-                        {/* 2. ENTITIES (Izņemot Player, ko renderējam atsevišķi) */}
-                        {/* Šeit varētu renderēt citus objektus, ja tie būtu statiski vai kustētos citādāk */}
-                        <div style={{ 
-                            display: 'grid', 
-                            gridTemplateColumns: `repeat(${mapWidth}, 32px)`, 
-                            gridTemplateRows: `repeat(${mapHeight}, 32px)`,
-                            position: 'absolute', top: 0, left: 0,
-                            pointerEvents: 'none' // Lai netraucētu klikšķiem vai citām mijiedarbībām
-                        }}>
-                                {Array(mapWidth * mapHeight).fill(0).map((_, index) => {
-                                const objId = objectMapData[index];
-                                // Ja nav objekta vai tas ir spēlētājs (ko jau renderējam dinamiski), izlaižam
-                                if (!objId || objId.includes('player')) return <div key={index} style={{ width: '32px', height: '32px' }} />;
-
-                                const objDef = registryItems.find(r => r.id === objId);
-                                return (
-                                    <div key={index} style={{ width: '32px', height: '32px', position: 'relative' }}>
-                                        {objDef && <AnimatedItem 
-                                            textures={objDef.textures} texture={objDef.texture} speed={objDef.animationSpeed}
-                                            style={{ position:'absolute', width: '100%', height: '100%', objectFit: 'contain' }} 
-                                        />}
-                                    </div>
-                                );
-                            })}
-                        </div>
-
-                        {/* 3. DYNAMIC PLAYER */}
-                        {playerVisuals && (
-                            <div style={{
-                                position: 'absolute',
-                                left: 0, top: 0,
-                                width: '32px', height: '32px',
-                                transform: `translate(${playerState.x}px, ${playerState.y}px) scaleX(${playerState.direction})`,
-                                transition: 'transform 0.05s linear', // Neliels smoothings, bet ne par daudz, lai nav lag
-                                zIndex: 10
-                            }}>
-                                <AnimatedItem 
-                                    textures={playerVisuals.textures} 
-                                    texture={playerVisuals.texture} 
-                                    speed={playerVisuals.animationSpeed}
-                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
-                                    className={playerState.health <= 0 ? 'dead' : ''} // Pievienojam klasi ja miris (var izmantot CSS animācijām)
-                                />
-                            </div>
-                        )}
+                        {/* PIXI RENDERER */}
+                        <PixiStage
+                            mapWidth={mapWidth}
+                            mapHeight={mapHeight}
+                            tileSize={32}
+                            tileMapData={tileMapData}
+                            objectMapData={objectMapData}
+                            registryItems={registryItems}
+                            playerState={playerState}
+                            playerVisuals={playerVisuals}
+                        />
 
                     </div>
                 ) : (

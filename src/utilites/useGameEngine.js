@@ -303,7 +303,11 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
 
     // Game Loop
     const update = (timestamp) => {
-        if (!isInitialized.current || !mapData) return;
+        // Keep RAF alive even if init not finished yet
+        if (!isInitialized.current || !mapData) {
+            requestRef.current = requestAnimationFrame(update);
+            return;
+        }
 
         // Aprēķinām delta laiku (ms) kopš pēdējā frame
         if (!lastTimeRef.current) {
@@ -348,7 +352,7 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
         // --- 2. Vertikālā kustība (Gravitācija & Lēkšana) ---
 
         // Lēkšana
-        if (keys.space && isGrounded) {
+        if ((keys.space || keys.w) && isGrounded) {
             vy = -JUMP_FORCE;
             isGrounded = false;
             animation = 'jump';
