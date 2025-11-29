@@ -21,6 +21,8 @@ export default function Game() {
     // Spēles dati no kartes
     const [mapWidth, setMapWidth] = useState(20);
     const [mapHeight, setMapHeight] = useState(15);
+    // Center small maps that don't require scrolling
+    const [shouldCenter, setShouldCenter] = useState(false);
     const [tileMapData, setTileMapData] = useState([]);
     // JAUNS: Saglabājam arī objektu slāņa datus
     const [objectMapData, setObjectMapData] = useState([]);
@@ -71,10 +73,33 @@ export default function Game() {
     }, []);
     // --- END ENGINE ---
 
-    // Camera follow with horizontal dead-zone on large maps
+    // Determine if the map fits entirely in the viewport; if so, center it
     useEffect(() => {
         const vp = viewportRef.current;
-        if (!vp || !activeMapData || isModalOpen) return;
+        if (!vp) return;
+        const recalc = () => {
+            const vw = vp.clientWidth || 0;
+            const vh = vp.clientHeight || 0;
+            const cw = mapWidth * 32;
+            const ch = mapHeight * 32;
+            const fits = cw <= vw && ch <= vh;
+            setShouldCenter(fits);
+            if (fits) {
+                // Ensure no residual scroll when centered
+                if ((vp.scrollLeft || vp.scrollTop)) {
+                    vp.scrollTo({ left: 0, top: 0, behavior: 'auto' });
+                }
+            }
+        };
+        recalc();
+        window.addEventListener('resize', recalc);
+        return () => window.removeEventListener('resize', recalc);
+    }, [mapWidth, mapHeight, isModalOpen]);
+
+    // Camera follow with horizontal dead-zone on large maps (disabled when map is centered)
+    useEffect(() => {
+        const vp = viewportRef.current;
+        if (!vp || !activeMapData || isModalOpen || shouldCenter) return;
 
         const vw = vp.clientWidth || 0;
         const contentWidth = mapWidth * 32;
@@ -99,7 +124,7 @@ export default function Game() {
         if (Math.abs(targetLeft - currentLeft) > 0.5) {
             vp.scrollTo({ left: targetLeft, top: 0, behavior: 'auto' });
         }
-    }, [playerState, activeMapData, isModalOpen, mapWidth]);
+    }, [playerState, activeMapData, isModalOpen, mapWidth, shouldCenter]);
 
     // JAUNS: Klausāmies navigācijas pogas
     useEffect(() => {
@@ -201,7 +226,11 @@ export default function Game() {
             )}
 
             <div ref={viewportRef} style={{ 
-                height: '100%', display: 'block', overflow: 'auto',
+                height: '100%',
+                display: shouldCenter ? 'flex' : 'block',
+                alignItems: shouldCenter ? 'center' : 'stretch',
+                justifyContent: shouldCenter ? 'center' : 'flex-start',
+                overflow: 'auto',
                 filter: isModalOpen ? 'blur(5px)' : 'none', pointerEvents: isModalOpen ? 'none' : 'auto', transition: 'filter 0.3s ease'
             }}>
                 {activeMapData ? (
