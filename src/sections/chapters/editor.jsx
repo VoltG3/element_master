@@ -72,6 +72,10 @@ export const Editor = () => {
     const [selectedBackgroundImage, setSelectedBackgroundImage] = useState(backgroundOptions[0]?.metaPath || null);
     const [backgroundParallaxFactor, setBackgroundParallaxFactor] = useState(0.3);
 
+    // Resolve selected background actual URL for preview in editor
+    const selectedBgOption = backgroundOptions.find((bg) => bg.metaPath === selectedBackgroundImage) || backgroundOptions[0];
+    const selectedBackgroundUrl = selectedBgOption ? selectedBgOption.src : null;
+
     const baseButtonStyle = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '1px solid #333', padding: '0 10px', height: '28px', backgroundColor: '#e0e0e0', marginRight: '5px', marginBottom: '5px', fontSize: '13px', color: '#000', borderRadius: '3px', userSelect: 'none', minWidth: '30px', boxSizing: 'border-box', textDecoration: 'none', lineHeight: 'normal' };
     const buttonStyle = { ...baseButtonStyle };
     const activeButtonStyle = { ...baseButtonStyle, backgroundColor: '#aaa', borderColor: '#000', fontWeight: 'bold' };
@@ -523,11 +527,27 @@ export const Editor = () => {
                 {/* Viewport */}
                 <div className="viewport" style={{ flex: 1, padding: '40px', backgroundColor: '#555', overflow: 'auto', position: 'relative', userSelect: 'none' }} onMouseUp={() => setIsDragging(false)}>
                     <div style={{ position: 'relative', width: 'fit-content' }} onMouseLeave={handleGridMouseLeave}>
+                        {/* Background preview layer */}
+                        <div
+                            style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: mapWidth * 32,
+                                height: mapHeight * 32,
+                                backgroundImage: selectedBackgroundUrl ? `url(${selectedBackgroundUrl})` : 'none',
+                                backgroundRepeat: 'repeat-x',
+                                backgroundSize: 'auto 100%',
+                                zIndex: 0,
+                                pointerEvents: 'none'
+                            }}
+                        />
                         <div className="grid"
                             style={{
                                 display: 'grid', gridTemplateColumns: `repeat(${mapWidth}, 32px)`, gridTemplateRows: `repeat(${mapHeight}, 32px)`,
-                                gap: showGrid ? '1px' : '0px', border: '1px solid #222', backgroundColor: '#222', position: 'relative',
-                                cursor: activeTool === 'bucket' ? 'cell' : 'default'
+                                gap: showGrid ? '1px' : '0px', border: '1px solid #222', backgroundColor: 'transparent', position: 'relative',
+                                cursor: activeTool === 'bucket' ? 'cell' : 'default',
+                                zIndex: 1
                             }}
                         >
                             {Array(mapWidth * mapHeight).fill(0).map((_, index) => {

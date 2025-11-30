@@ -106,8 +106,14 @@ const PixiStage = ({
       tex.baseTexture.wrapMode = WRAP_MODES.REPEAT;
     }
 
-    const sprite = new TilingSprite({ texture: tex, width: mapWidth * tileSize, height: mapHeight * tileSize });
-    sprite.tileScale.set(1, 1);
+    // Scale the tiling pattern vertically so exactly one tile fills the full map height.
+    const targetH = mapHeight * tileSize;
+    const texH = (tex.height || tex.baseTexture?.height || 1);
+    const scaleY = targetH / texH;
+
+    const sprite = new TilingSprite({ texture: tex, width: mapWidth * tileSize, height: targetH });
+    // Keep natural horizontal scale, stretch only vertically to avoid multi-row tiling
+    sprite.tileScale.set(1, scaleY);
     sprite.x = 0;
     sprite.y = 0;
     layer.addChild(sprite);
@@ -427,10 +433,15 @@ const PixiStage = ({
     const app = appRef.current;
     if (!app) return;
     app.renderer.resize(mapWidth * tileSize, mapHeight * tileSize);
-    // Resize parallax tiling sprite too
+    // Resize parallax tiling sprite too and recalc vertical tile scale
     if (parallaxSpriteRef.current) {
-      parallaxSpriteRef.current.width = mapWidth * tileSize;
-      parallaxSpriteRef.current.height = mapHeight * tileSize;
+      const spr = parallaxSpriteRef.current;
+      spr.width = mapWidth * tileSize;
+      spr.height = mapHeight * tileSize;
+      const tex = spr.texture;
+      const texH = (tex?.height || tex?.baseTexture?.height || 1);
+      const scaleY = (mapHeight * tileSize) / texH;
+      spr.tileScale.set(1, scaleY);
     }
   }, [mapWidth, mapHeight, tileSize]);
 
