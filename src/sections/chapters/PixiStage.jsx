@@ -32,6 +32,7 @@ const PixiStage = ({
   const parallaxRef = useRef(null);
   const parallaxSpriteRef = useRef(null);
   const cameraScrollRef = useRef(0);
+  const parallaxFactorRef = useRef(Number(backgroundParallaxFactor) || 0.3);
   const bgRef = useRef(null);
   const objRef = useRef(null);
   const playerRef = useRef(null);
@@ -44,6 +45,9 @@ const PixiStage = ({
   useEffect(() => {
     cameraScrollRef.current = Number(cameraScrollX) || 0;
   }, [cameraScrollX]);
+  useEffect(() => {
+    parallaxFactorRef.current = Number(backgroundParallaxFactor) || 0.3;
+  }, [backgroundParallaxFactor]);
 
   // Small helper cache for textures
   const textureCacheRef = useRef(new Map());
@@ -279,7 +283,7 @@ const PixiStage = ({
         }
 
         // Update parallax background tile offset based on camera scroll
-        const f = Number(backgroundParallaxFactor) || 0.3;
+        const f = parallaxFactorRef.current;
         const camX = cameraScrollRef.current || 0;
         if (parallaxSpriteRef.current) {
           const spr = parallaxSpriteRef.current;

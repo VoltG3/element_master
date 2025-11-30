@@ -25,16 +25,21 @@ export default function GameTerminal() {
   const [input, setInput] = useState('');
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
+  const suppressUntilRef = useRef(0);
+  const suppressActiveRef = useRef(false);
 
   // Toggle handler from global events
   useEffect(() => {
     const onToggle = () => setOpen(prev => !prev);
     const onClear = () => setLines([]);
+    const onClose = () => setOpen(false);
     window.addEventListener('game-toggle-terminal', onToggle);
     window.addEventListener('game-terminal-clear', onClear);
+    window.addEventListener('game-close-terminal', onClose);
     return () => {
       window.removeEventListener('game-toggle-terminal', onToggle);
       window.removeEventListener('game-terminal-clear', onClear);
+      window.removeEventListener('game-close-terminal', onClose);
     };
   }, []);
 
@@ -42,6 +47,9 @@ export default function GameTerminal() {
   useEffect(() => {
     try { window.__GAME_TERMINAL_OPEN__ = open; } catch {}
     if (open) {
+      // Clear any previous text and suppress initial keystrokes that were held during gameplay
+      setInput('');
+      try { suppressUntilRef.current = (typeof performance !== 'undefined' ? performance.now() : Date.now()) + 220; } catch { suppressUntilRef.current = Date.now() + 220; }
       setTimeout(() => inputRef.current && inputRef.current.focus(), 0);
     }
   }, [open]);
@@ -94,6 +102,14 @@ export default function GameTerminal() {
         <input
           ref={inputRef}
           value={input}
+          onKeyDown={(e) => {
+            const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+            if (now < (suppressUntilRef.current || 0) && e.key !== 'Escape') {
+              if (typeof e.preventDefault === 'function') e.preventDefault();
+              if (typeof e.stopPropagation === 'function') e.stopPropagation();
+              return;
+            }
+          }}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Enter command..."
           style={{ flex: 1, background: '#111', color: '#fff', border: '1px solid #333', padding: '6px 8px', borderRadius: '3px', outline: 'none' }}

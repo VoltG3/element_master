@@ -4,6 +4,14 @@ import React, { useEffect, useRef, useState } from 'react';
 // Opens when the custom event 'game-open-settings' is dispatched (from terminal command `settings`).
 // Renders above the game canvas but below the in-game terminal.
 export default function GameSettings() {
+  // Runtime-linked settings (live updates)
+  const [parallax, setParallax] = useState(() => {
+    try {
+      const g = window.__GAME_RUNTIME_SETTINGS__;
+      if (g && typeof g.backgroundParallaxFactor === 'number') return g.backgroundParallaxFactor;
+    } catch {}
+    return 0.3;
+  });
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [pos, setPos] = useState(() => {
@@ -38,6 +46,15 @@ export default function GameSettings() {
     const onOpen = () => {
       setOpen(true);
       setMinimized(false);
+      // Sync current values from global when opening
+      try {
+        const g = window.__GAME_RUNTIME_SETTINGS__ || {};
+        if (typeof g.backgroundParallaxFactor === 'number') {
+          setParallax(g.backgroundParallaxFactor);
+        }
+      } catch {}
+      // Auto-close the in-game terminal when settings opens
+      try { window.dispatchEvent(new CustomEvent('game-close-terminal')); } catch {}
     };
     window.addEventListener('game-open-settings', onOpen);
     return () => window.removeEventListener('game-open-settings', onOpen);
@@ -85,6 +102,17 @@ export default function GameSettings() {
 
   const onClose = () => setOpen(false);
   const onMinToggle = () => setMinimized((m) => !m);
+
+  const emitUpdate = (patch) => {
+    try {
+      window.dispatchEvent(new CustomEvent('game-settings-update', { detail: patch }));
+      // Mirror into a global bag for components that want to read without listeners
+      window.__GAME_RUNTIME_SETTINGS__ = {
+        ...(window.__GAME_RUNTIME_SETTINGS__ || {}),
+        ...patch,
+      };
+    } catch {}
+  };
 
   const onResizeMouseDown = (e) => {
     // Simple bottom-right resize drag
@@ -184,7 +212,19 @@ export default function GameSettings() {
           <div style={{ fontSize: 12, marginBottom: 6, color: '#d6d6d6' }}>Graphics</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <label style={{ fontSize: 12, width: 120 }}>Parallax Factor</label>
-            <input type="range" min="0" max="1" step="0.05" defaultValue={0.3} />
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={Number.isFinite(parallax) ? parallax : 0.3}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value);
+                setParallax(v);
+                emitUpdate({ backgroundParallaxFactor: v });
+              }}
+            />
+            <span style={{ fontSize: 12, width: 40, textAlign: 'right' }}>{(Number.isFinite(parallax) ? parallax : 0.3).toFixed(2)}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <label style={{ fontSize: 12, width: 120 }}>VSync</label>

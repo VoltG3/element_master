@@ -21,6 +21,8 @@ export default function Game() {
     const [isModalOpen, setIsModalOpen] = useState(true);
     const [activeMapData, setActiveMapData] = useState(null);
     const [cameraScrollX, setCameraScrollX] = useState(0);
+    // Runtime settings that can be changed from GameSettings on the fly
+    const [runtimeSettings, setRuntimeSettings] = useState({});
 
     // Spēles dati no kartes
     const [mapWidth, setMapWidth] = useState(20);
@@ -130,12 +132,32 @@ export default function Game() {
         }
     }, [playerState, activeMapData, isModalOpen, mapWidth, shouldCenter]);
 
+    // Listen for runtime settings updates from GameSettings (live apply)
+    useEffect(() => {
+        const onSettingsUpdate = (e) => {
+            const patch = (e && e.detail) || {};
+            setRuntimeSettings(prev => ({ ...prev, ...patch }));
+        };
+        window.addEventListener('game-settings-update', onSettingsUpdate);
+        return () => window.removeEventListener('game-settings-update', onSettingsUpdate);
+    }, []);
+
     // JAUNS: Klausāmies navigācijas pogas
     useEffect(() => {
         const handleOpenModalEvent = () => setIsModalOpen(true);
         window.addEventListener('open-new-game-modal', handleOpenModalEvent);
         return () => window.removeEventListener('open-new-game-modal', handleOpenModalEvent);
     }, []);
+
+    // Mirror current effective runtime settings for other components to read (like GameSettings)
+    useEffect(() => {
+        try {
+            window.__GAME_RUNTIME_SETTINGS__ = {
+                ...(window.__GAME_RUNTIME_SETTINGS__ || {}),
+                backgroundParallaxFactor: (runtimeSettings.backgroundParallaxFactor ?? activeMapData?.meta?.backgroundParallaxFactor ?? 0.3)
+            };
+        } catch {}
+    }, [runtimeSettings, activeMapData]);
 
     const loadMapData = (mapData) => {
         if (!mapData) return;
@@ -197,13 +219,6 @@ export default function Game() {
             {/* JAUNS: Game Header */}
             <GameHeader health={playerState.health} />
 
-            {!isModalOpen && (
-                <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 100 }}>
-                    <button onClick={() => setIsModalOpen(true)} style={{ padding: '10px 20px', backgroundColor: '#FF9800', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 2px 5px rgba(0,0,0,0.3)', textTransform: 'uppercase', fontSize: '12px' }}>
-                        New Game
-                    </button>
-                </div>
-            )}
         
             {isModalOpen && (
                 <div style={modalOverlayStyle}>
@@ -260,7 +275,7 @@ export default function Game() {
                             playerVisuals={playerVisuals}
                             backgroundImage={activeMapData?.meta?.backgroundImage}
                             backgroundColor={activeMapData?.meta?.backgroundColor}
-                            backgroundParallaxFactor={activeMapData?.meta?.backgroundParallaxFactor}
+                            backgroundParallaxFactor={(runtimeSettings.backgroundParallaxFactor ?? activeMapData?.meta?.backgroundParallaxFactor)}
                             cameraScrollX={cameraScrollX}
                         />
 

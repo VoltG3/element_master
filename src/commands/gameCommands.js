@@ -54,7 +54,11 @@ register({
   name: 'settings',
   description: "Open the draggable game settings window",
   handler() {
-    try { window.dispatchEvent(new CustomEvent('game-open-settings')); } catch {}
+    try { 
+      window.dispatchEvent(new CustomEvent('game-open-settings'));
+      // Also close terminal automatically when opening settings
+      window.dispatchEvent(new CustomEvent('game-close-terminal'));
+    } catch {}
     return 'Opening settings...';
   }
 });
