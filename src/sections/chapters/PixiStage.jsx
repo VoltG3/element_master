@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Application, Container, Sprite, Texture, AnimatedSprite, Assets, TilingSprite, WRAP_MODES } from 'pixi.js';
+import { Application, Container, Sprite, Texture, AnimatedSprite, Assets, TilingSprite, WRAP_MODES, BlurFilter } from 'pixi.js';
 
 // Suppress noisy Pixi Assets warnings for inlined data URLs (we load textures directly)
 Assets.setPreferences?.({ skipCacheIdWarning: true });
@@ -23,21 +23,27 @@ const PixiStage = ({
   playerState,
   playerVisuals,
   backgroundImage,
+  backgroundColor,
   backgroundParallaxFactor = 0.3,
+  cameraScrollX = 0,
 }) => {
   const mountRef = useRef(null);
   const appRef = useRef(null);
   const parallaxRef = useRef(null);
   const parallaxSpriteRef = useRef(null);
+  const cameraScrollRef = useRef(0);
   const bgRef = useRef(null);
   const objRef = useRef(null);
   const playerRef = useRef(null);
   const playerStateRef = useRef(null);
 
-  // keep latest player state for ticker without re-subscribing
+  // keep latest player state and camera scroll for ticker without re-subscribing
   useEffect(() => {
     playerStateRef.current = playerState;
   }, [playerState]);
+  useEffect(() => {
+    cameraScrollRef.current = Number(cameraScrollX) || 0;
+  }, [cameraScrollX]);
 
   // Small helper cache for textures
   const textureCacheRef = useRef(new Map());
@@ -97,27 +103,48 @@ const PixiStage = ({
     parallaxSpriteRef.current = null;
 
     const url = resolveBackgroundUrl(backgroundImage);
-    if (!url) return;
 
-    // Ensure texture is created and repeatable
-    const tex = getTexture(url);
-    if (!tex) return;
-    if (tex.baseTexture) {
-      tex.baseTexture.wrapMode = WRAP_MODES.REPEAT;
+    // If image exists, create TilingSprite; otherwise, solid color Sprite
+    if (url) {
+      // Ensure texture is created and repeatable
+      const tex = getTexture(url);
+      if (!tex) return;
+      if (tex.baseTexture) {
+        tex.baseTexture.wrapMode = WRAP_MODES.REPEAT;
+      }
+
+      // Scale the tiling pattern vertically so exactly one tile fills the full map height.
+      const targetH = mapHeight * tileSize;
+      const texH = (tex.height || tex.baseTexture?.height || 1);
+      const scaleY = targetH / texH;
+
+      const sprite = new TilingSprite({ texture: tex, width: mapWidth * tileSize, height: targetH });
+      // Keep natural horizontal scale, stretch only vertically to avoid multi-row tiling
+      sprite.tileScale.set(1, scaleY);
+      sprite.x = 0;
+      sprite.y = 0;
+      // Depth look: slightly dim and blur
+      sprite.alpha = 0.9;
+      try {
+        sprite.filters = [new BlurFilter({ strength: 1.2, quality: 2 })];
+      } catch (e) { /* filters optional */ }
+      layer.addChild(sprite);
+      parallaxSpriteRef.current = sprite;
+    } else {
+      // Solid color fill
+      const color = backgroundColor || '#87CEEB';
+      const hex = (typeof color === 'string' && color.startsWith('#')) ? parseInt(color.slice(1), 16) : (Number(color) || 0x87CEEB);
+      const solid = new Sprite(Texture.WHITE);
+      solid.tint = hex;
+      solid.width = mapWidth * tileSize;
+      solid.height = mapHeight * tileSize;
+      solid.alpha = 0.95;
+      try {
+        solid.filters = [new BlurFilter({ strength: 0.8, quality: 2 })];
+      } catch (e) { /* optional */ }
+      layer.addChild(solid);
+      parallaxSpriteRef.current = solid;
     }
-
-    // Scale the tiling pattern vertically so exactly one tile fills the full map height.
-    const targetH = mapHeight * tileSize;
-    const texH = (tex.height || tex.baseTexture?.height || 1);
-    const scaleY = targetH / texH;
-
-    const sprite = new TilingSprite({ texture: tex, width: mapWidth * tileSize, height: targetH });
-    // Keep natural horizontal scale, stretch only vertically to avoid multi-row tiling
-    sprite.tileScale.set(1, scaleY);
-    sprite.x = 0;
-    sprite.y = 0;
-    layer.addChild(sprite);
-    parallaxSpriteRef.current = sprite;
   };
 
   // Convert ms-per-frame (JSON) to Pixi AnimatedSprite speed factor (1 = 60fps)
@@ -238,10 +265,8 @@ const PixiStage = ({
       // Update player and parallax each frame
       app.ticker.add(() => {
         const s = playerStateRef.current;
-        if (!s) return;
-
         // Update player sprite if available
-        if (playerRef.current) {
+        if (s && playerRef.current) {
           const p = playerRef.current;
           if (s.width) p.width = s.width;
           if (s.height) p.height = s.height;
@@ -253,13 +278,17 @@ const PixiStage = ({
           p.y = s.y || 0;
         }
 
-        // Update parallax background tile offset
+        // Update parallax background tile offset based on camera scroll
+        const f = Number(backgroundParallaxFactor) || 0.3;
+        const camX = cameraScrollRef.current || 0;
         if (parallaxSpriteRef.current) {
-          // Move slower than foreground: factor in [0..1)
-          const f = Number(backgroundParallaxFactor) || 0.3;
-          // Negative to move in opposite direction of camera (assuming camera follows player)
-          parallaxSpriteRef.current.tilePosition.x = -(s.x || 0) * f;
-          parallaxSpriteRef.current.tilePosition.y = 0;
+          const spr = parallaxSpriteRef.current;
+          if (spr.tilePosition) {
+            spr.tilePosition.x = -camX * f;
+            spr.tilePosition.y = 0;
+          } else {
+            // Solid color sprite: nothing to tile, keep static
+          }
         }
       });
     };
@@ -426,7 +455,7 @@ const PixiStage = ({
     const app = appRef.current;
     if (!app) return;
     rebuildParallax();
-  }, [backgroundImage, backgroundParallaxFactor, mapWidth, mapHeight, tileSize]);
+  }, [backgroundImage, backgroundColor, backgroundParallaxFactor, mapWidth, mapHeight, tileSize]);
 
   // Resize application when map size changes
   useEffect(() => {

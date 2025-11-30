@@ -18,6 +18,7 @@ export default function Game() {
     const viewportRef = useRef(null);
     const [isModalOpen, setIsModalOpen] = useState(true);
     const [activeMapData, setActiveMapData] = useState(null);
+    const [cameraScrollX, setCameraScrollX] = useState(0);
 
     // Spēles dati no kartes
     const [mapWidth, setMapWidth] = useState(20);
@@ -137,6 +138,9 @@ export default function Game() {
     const loadMapData = (mapData) => {
         if (!mapData) return;
 
+        // Reset camera scroll when loading a new map
+        setCameraScrollX(0);
+
         const w = mapData.meta?.width || mapData.width || 20;
         const h = mapData.meta?.height || mapData.height || 15;
         setMapWidth(w);
@@ -226,7 +230,7 @@ export default function Game() {
                 </div>
             )}
 
-            <div ref={viewportRef} style={{ 
+            <div ref={viewportRef} onScroll={(e) => setCameraScrollX(e.currentTarget.scrollLeft || 0)} style={{ 
                 height: '100%',
                 display: shouldCenter ? 'flex' : 'block',
                 alignItems: shouldCenter ? 'center' : 'stretch',
@@ -253,7 +257,9 @@ export default function Game() {
                             playerState={playerState}
                             playerVisuals={playerVisuals}
                             backgroundImage={activeMapData?.meta?.backgroundImage}
+                            backgroundColor={activeMapData?.meta?.backgroundColor}
                             backgroundParallaxFactor={activeMapData?.meta?.backgroundParallaxFactor}
+                            cameraScrollX={cameraScrollX}
                         />
 
                     </div>

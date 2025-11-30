@@ -71,10 +71,11 @@ export const Editor = () => {
 
     const [selectedBackgroundImage, setSelectedBackgroundImage] = useState(backgroundOptions[0]?.metaPath || null);
     const [backgroundParallaxFactor, setBackgroundParallaxFactor] = useState(0.3);
+    const [selectedBackgroundColor, setSelectedBackgroundColor] = useState('#87CEEB'); // fallback sky color when no image
 
     // Resolve selected background actual URL for preview in editor
     const selectedBgOption = backgroundOptions.find((bg) => bg.metaPath === selectedBackgroundImage) || backgroundOptions[0];
-    const selectedBackgroundUrl = selectedBgOption ? selectedBgOption.src : null;
+    const selectedBackgroundUrl = selectedBgOption && selectedBackgroundImage ? selectedBgOption.src : null;
 
     const baseButtonStyle = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '1px solid #333', padding: '0 10px', height: '28px', backgroundColor: '#e0e0e0', marginRight: '5px', marginBottom: '5px', fontSize: '13px', color: '#000', borderRadius: '3px', userSelect: 'none', minWidth: '30px', boxSizing: 'border-box', textDecoration: 'none', lineHeight: 'normal' };
     const buttonStyle = { ...baseButtonStyle };
@@ -140,6 +141,7 @@ export const Editor = () => {
                 date_map_created_at: createdDate, // 3. Izveides datums
                 date_map_last_updated: currentDate, // 4. Pēdējās izmaiņas
                 backgroundImage: selectedBackgroundImage || null, // 5. Fona bilde (seamless)
+                backgroundColor: selectedBackgroundImage ? null : selectedBackgroundColor, // 5.1. Fona krāsa, ja nav bildes
                 backgroundParallaxFactor: backgroundParallaxFactor // 6. Parallakses koeficients
             },
             statistics: { // 5. Papildus statistika
@@ -176,10 +178,13 @@ export const Editor = () => {
                         if (loaded.meta.author) setCreatorName(loaded.meta.author);
                         if (loaded.meta.date_map_created_at) setCreatedAt(loaded.meta.date_map_created_at);
                         // Jaunais: fona bilde un parallakse
-                        if (typeof loaded.meta.backgroundImage !== 'undefined') {
+                        if (typeof loaded.meta.backgroundImage !== 'undefined' && loaded.meta.backgroundImage) {
                             setSelectedBackgroundImage(loaded.meta.backgroundImage);
                         } else {
-                            setSelectedBackgroundImage(backgroundOptions[0]?.metaPath || null);
+                            setSelectedBackgroundImage(null);
+                        }
+                        if (typeof loaded.meta.backgroundColor !== 'undefined' && loaded.meta.backgroundColor) {
+                            setSelectedBackgroundColor(loaded.meta.backgroundColor);
                         }
                         if (typeof loaded.meta.backgroundParallaxFactor !== 'undefined') {
                             setBackgroundParallaxFactor(loaded.meta.backgroundParallaxFactor);
@@ -503,6 +508,14 @@ export const Editor = () => {
                          {/* JAUNS: Background Image izvēle */}
                          <PaletteSection title="Background Image" isOpenDefault={true}>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+                                {/* Color option (no image) */}
+                                <div onClick={() => setSelectedBackgroundImage(null)}
+                                     style={{ border: selectedBackgroundImage ? '1px solid #ccc' : '2px solid #4CAF50', borderRadius: '4px', padding: '2px', cursor: 'pointer', background:'#fff' }}
+                                     title="Solid Color"
+                                >
+                                    <div style={{ width: '100%', height: '48px', background: selectedBackgroundColor, display:'block', borderRadius:'2px' }} />
+                                    <div style={{ fontSize: '10px', textAlign:'center', paddingTop:'2px' }}>Solid Color</div>
+                                </div>
                                 {backgroundOptions.map((bg) => (
                                     <div key={bg.name} onClick={() => setSelectedBackgroundImage(bg.metaPath)}
                                          style={{ border: selectedBackgroundImage === bg.metaPath ? '2px solid #4CAF50' : '1px solid #ccc', borderRadius: '4px', padding: '2px', cursor: 'pointer', background:'#fff' }}
@@ -513,10 +526,14 @@ export const Editor = () => {
                                     </div>
                                 ))}
                             </div>
-                            <div style={{ marginTop: '8px' }}>
+                            <div style={{ marginTop: '8px', display:'flex', alignItems:'center', gap:'8px' }}>
                                 <label style={{ fontSize: '12px' }}>Parallax: </label>
                                 <input type="range" min="0" max="1" step="0.05" value={backgroundParallaxFactor} onChange={(e) => setBackgroundParallaxFactor(parseFloat(e.target.value))} />
-                                <span style={{ fontSize: '12px', marginLeft:'6px' }}>{backgroundParallaxFactor.toFixed(2)}</span>
+                                <span style={{ fontSize: '12px' }}>{backgroundParallaxFactor.toFixed(2)}</span>
+                            </div>
+                            <div style={{ marginTop: '8px', display:'flex', alignItems:'center', gap:'8px' }}>
+                                <label style={{ fontSize: '12px' }}>Background Color:</label>
+                                <input type="color" value={selectedBackgroundColor} onChange={(e) => setSelectedBackgroundColor(e.target.value)} />
                             </div>
                          </PaletteSection>
                     </div>
@@ -536,6 +553,7 @@ export const Editor = () => {
                                 width: mapWidth * 32,
                                 height: mapHeight * 32,
                                 backgroundImage: selectedBackgroundUrl ? `url(${selectedBackgroundUrl})` : 'none',
+                                backgroundColor: !selectedBackgroundUrl ? selectedBackgroundColor : 'transparent',
                                 backgroundRepeat: 'repeat-x',
                                 backgroundSize: 'auto 100%',
                                 zIndex: 0,
@@ -545,7 +563,7 @@ export const Editor = () => {
                         <div className="grid"
                             style={{
                                 display: 'grid', gridTemplateColumns: `repeat(${mapWidth}, 32px)`, gridTemplateRows: `repeat(${mapHeight}, 32px)`,
-                                gap: showGrid ? '1px' : '0px', border: '1px solid #222', backgroundColor: 'transparent', position: 'relative',
+                                gap: '0px', border: '1px solid #444', backgroundColor: 'transparent', position: 'relative',
                                 cursor: activeTool === 'bucket' ? 'cell' : 'default',
                                 zIndex: 1
                             }}
@@ -568,9 +586,9 @@ export const Editor = () => {
                                 let isBrushTarget = false; if ((activeTool === 'brush') && hoverIndex !== null) { const hx = hoverIndex % mapWidth; const hy = Math.floor(hoverIndex / mapWidth); if (x >= hx && x < hx + brushSize && y >= hy && y < hy + brushSize) isBrushTarget = true; }
                                 let isBucketTarget = false; let isBucketPreview = false; if (activeTool === 'bucket') { if (bucketPreviewIndices.has(index)) isBucketPreview = true; else if (hoverIndex === index) isBucketTarget = true; }
 
-                                // Izmantojam gridColor šeit
-                                let borderStyle = `1px solid ${showGrid ? (activeLayer === 'tile' ? 'rgba(0, 0, 255, 0.1)' : 'rgba(255, 0, 0, 0.1)') : 'transparent'}`;
-                                let bgStyle = '#fff';
+                                // Grid: neutral light grey lines, transparent background by default
+                                let borderStyle = showGrid ? '0.5px solid rgba(128,128,128,0.5)' : 'none';
+                                let bgStyle = 'transparent';
                                 if (isBrushTarget) borderStyle = '2px solid red';
                                 else if (isBucketPreview) { borderStyle = '1px dashed orange'; bgStyle = 'rgb(168,187,220)'; }
                                 else if (isBucketTarget) borderStyle = '2px solid orange';
