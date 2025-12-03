@@ -22,8 +22,12 @@
 
   "hitboxScale": 0.8,
 
-  "collisionWithTiles": false,
+  "collisionWithTiles": true,
   "collisionWithEntities": true,
+
+  "maxBounces": 3,
+  "bounceDamping": 0.6,
+  "ricochetRandom": 0.15,
 
   "directional": true
 }

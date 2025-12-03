@@ -32,6 +32,7 @@ const PixiStage = ({
   weatherRain = 0,
   weatherSnow = 0,
   weatherClouds = 0,
+  projectiles = [],
 }) => {
   const mountRef = useRef(null);
   const appRef = useRef(null);
@@ -46,11 +47,17 @@ const PixiStage = ({
   const weatherLayerRef = useRef(null);
   const fogLayerRef = useRef(null); // reused as clouds overlay layer
   const weatherSystemsRef = useRef({ rain: null, snow: null, clouds: null });
+  const projectilesLayerRef = useRef(null);
+  const projectileSpritesRef = useRef(new Map()); // id -> sprite
+  const projectilesPropRef = useRef([]);
 
   // keep latest player state and camera scroll for ticker without re-subscribing
   useEffect(() => {
     playerStateRef.current = playerState;
   }, [playerState]);
+  useEffect(() => {
+    projectilesPropRef.current = Array.isArray(projectiles) ? projectiles : [];
+  }, [projectiles]);
   useEffect(() => {
     cameraScrollRef.current = Number(cameraScrollX) || 0;
   }, [cameraScrollX]);
@@ -216,6 +223,7 @@ const PixiStage = ({
       const playerLayer = new Container();
       const weatherLayer = new Container();
       const fogLayer = new Container();
+      const projLayer = new Container();
 
       bgRef.current = bg;
       objRef.current = obj;
@@ -227,11 +235,13 @@ const PixiStage = ({
       app.stage.addChild(bg);
       app.stage.addChild(obj);
       app.stage.addChild(playerLayer);
-      app.stage.addChild(weatherLayer); // rain/snow above player
+      app.stage.addChild(projLayer); // projectiles above player
+      app.stage.addChild(weatherLayer); // rain/snow above projectiles
       app.stage.addChild(fogLayer); // clouds overlay on top
 
       weatherLayerRef.current = weatherLayer;
       fogLayerRef.current = fogLayer;
+      projectilesLayerRef.current = projLayer;
 
       // Preload textures to avoid Assets cache warnings for data URLs and ensure textures are ready
       try {
@@ -341,6 +351,52 @@ const PixiStage = ({
         if (systems.rain) systems.rain.update(dt);
         if (systems.snow) systems.snow.update(dt);
         if (systems.clouds) systems.clouds.update(dt);
+
+        // Projectiles sync/update: create missing sprites, remove stale, update positions
+        const layer = projectilesLayerRef.current;
+        if (layer) {
+          const map = projectileSpritesRef.current;
+          const list = projectilesPropRef.current || [];
+          const seen = new Set();
+          for (let i = 0; i < list.length; i++) {
+            const p = list[i];
+            const key = p.id;
+            seen.add(key);
+            let spr = map.get(key);
+            if (!spr) {
+              const def = getRegItem(p.defId);
+              if (def && Array.isArray(def.textures) && def.textures.length > 1) {
+                const frames = def.textures.map((u) => getTexture(u)).filter(Boolean);
+                if (frames.length > 0) {
+                  spr = new AnimatedSprite(frames);
+                  spr.animationSpeed = msToSpeed(def.animationSpeed);
+                  spr.play();
+                }
+              }
+              if (!spr) {
+                const tex = getTexture(getRegItem(p.defId)?.texture) || Texture.WHITE;
+                spr = new Sprite(tex);
+              }
+              spr.anchor.set(0.5, 0.5);
+              spr.width = Math.max(2, p.w || tileSize * 0.25);
+              spr.height = Math.max(2, p.h || tileSize * 0.25);
+              layer.addChild(spr);
+              map.set(key, spr);
+            }
+            spr.x = p.x + (p.dir >= 0 ? 0 : 0);
+            spr.y = p.y;
+            const mag = Math.abs(spr.scale.x || 1);
+            spr.scale.x = p.dir >= 0 ? mag : -mag;
+          }
+          // remove sprites that no longer exist
+          for (const [key, spr] of map.entries()) {
+            if (!seen.has(key)) {
+              try { spr.parent && spr.parent.removeChild(spr); } catch {}
+              try { spr.destroy && spr.destroy(); } catch {}
+              map.delete(key);
+            }
+          }
+        }
       });
     };
 
@@ -428,6 +484,15 @@ const PixiStage = ({
         weatherSystemsRef.current.rain?.destroy();
         weatherSystemsRef.current.snow?.destroy();
         weatherSystemsRef.current.fog?.destroy();
+      } catch {}
+      // destroy projectile sprites
+      try {
+        const map = projectileSpritesRef.current;
+        for (const spr of map.values()) {
+          try { spr.parent && spr.parent.removeChild(spr); } catch {}
+          try { spr.destroy && spr.destroy(); } catch {}
+        }
+        projectileSpritesRef.current.clear();
       } catch {}
       textureCacheRef.current.forEach((t) => t.destroy && t.destroy(true));
       textureCacheRef.current.clear();

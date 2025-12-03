@@ -233,7 +233,7 @@ export default function Game() {
         <div style={{ position: 'relative', height: '100%', overflow: 'hidden', backgroundColor: '#333' }}>
         
             {/* JAUNS: Game Header */}
-            <GameHeader health={playerState.health} soundEnabled={soundEnabled} onToggleSound={() => {
+            <GameHeader health={playerState.health} ammo={playerState.ammo || 0} soundEnabled={soundEnabled} onToggleSound={() => {
                 const next = !soundEnabled;
                 setSoundEnabled(next);
                 try { localStorage.setItem('game_sound_enabled', next ? '1' : '0'); } catch {}
@@ -296,6 +296,7 @@ export default function Game() {
                             registryItems={registryItems}
                             playerState={playerState}
                             playerVisuals={playerVisuals}
+                            projectiles={playerState.projectiles || []}
                             backgroundImage={activeMapData?.meta?.backgroundImage}
                             backgroundColor={activeMapData?.meta?.backgroundColor}
                             backgroundParallaxFactor={(runtimeSettings.backgroundParallaxFactor ?? activeMapData?.meta?.backgroundParallaxFactor)}

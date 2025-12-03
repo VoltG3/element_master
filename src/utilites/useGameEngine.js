@@ -24,7 +24,9 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
         isGrounded: false,
         direction: 1, // 1 pa labi, -1 pa kreisi
         animation: 'idle', // idle, run, jump
-        health: 90 // Sākotnējā veselība (testam, lai var paņemt sirdi)
+        health: 90, // Sākotnējā veselība (testam, lai var paņemt sirdi)
+        ammo: 0, // Fireball munīcija
+        projectiles: [] // Aktīvie šāvieni renderam
     });
 
     // Ref objekti spēles loģikai
@@ -35,6 +37,9 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
     const hazardDamageAccumulatorRef = useRef(0);          // Uzkrātais laiks hazard damage laika gaitā
     const lastHazardIndexRef = useRef(null);               // Pēdējā hazard tile indeksa cache (lai saistītu damage ar konkrētu hazard)
     const triggeredHazardsRef = useRef(new Set());         // Hazardi ar damageOnce: true, kuri jau ir nostrādājuši
+    const projectilesRef = useRef([]);                     // Aktīvie šāviņi
+    const shootCooldownRef = useRef(0);                    // Atlikušais cooldown laiks (ms)
+    const projectileIdRef = useRef(1);                     // Auto ID pieaugums
 
     // Inicializējam spēlētāju sākuma pozīcijā
     // Svarīgi: Šis efekts tagad ir atkarīgs TIKAI no mapData (kurš nemainās, kad savāc itemu)
@@ -45,6 +50,9 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
         hazardDamageAccumulatorRef.current = 0;
         lastHazardIndexRef.current = null;
         triggeredHazardsRef.current = new Set();
+        projectilesRef.current = [];
+        shootCooldownRef.current = 0;
+        projectileIdRef.current = 1;
 
         if (mapData && mapData.layers) {
             const mapW = mapData.meta?.width || mapData.width || 20;
@@ -73,7 +81,8 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
                         isGrounded: false,
                         direction: 1,
                         animation: 'idle',
-                        health: 90 // Resetojam uz 90 (nevis MAX), lai var testēt itemus
+                        health: 90, // Resetojam uz 90 (nevis MAX), lai var testēt itemus
+                        ammo: 0
                     };
 
                     // Ja starta pozīcija iegrimst blokā, pabīdam uz augšu līdz drošai vietai
@@ -86,7 +95,7 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
                     const maxXAtStart = mapW * TILE_SIZE - gameState.current.width;
                     gameState.current.x = Math.max(0, Math.min(gameState.current.x, maxXAtStart));
 
-                    setPlayer({ ...gameState.current });
+                    setPlayer({ ...gameState.current, projectiles: [] });
                     isInitialized.current = true;
                 } else {
                     // Ja spēlētājs nav atrasts kartē, novietojam to 0,0 vai kādā drošā vietā
@@ -97,7 +106,7 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
                         vx: 0,
                         vy: 0
                     };
-                    setPlayer({ ...gameState.current });
+                    setPlayer({ ...gameState.current, projectiles: [] });
                     isInitialized.current = true; // ļaujam loopam darboties arī bez start pozīcijas
                 }
             } else {
@@ -109,7 +118,7 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
                     vx: 0,
                     vy: 0
                 };
-                setPlayer({ ...gameState.current });
+                setPlayer({ ...gameState.current, projectiles: [] });
                 isInitialized.current = true;
             }
         }
@@ -149,6 +158,26 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
         return false;
     };
 
+    // JAUNS: Vienkārša punkta cietuma pārbaude projektiliem (pēc PixiStage loģikas)
+    const isSolidAtPixel = (wx, wy, mapWidthTiles, mapHeightTiles) => {
+        // Ļaujam kustību virs kartes
+        if (wy < 0) return false;
+        const gx = Math.floor(wx / TILE_SIZE);
+        const gy = Math.floor(wy / TILE_SIZE);
+        // Ārpus pasaules nav ciets (projektils vienkārši tiks izmests ārā ar robežu pārbaudi)
+        if (gx < 0 || gy < 0 || gx >= mapWidthTiles || gy >= mapHeightTiles) return false;
+        const index = gy * mapWidthTiles + gx;
+        const tileId = tileData[index];
+        if (!tileId) return false;
+        const tileDef = registryItems.find(r => r.id === tileId);
+        if (!tileDef || !tileDef.collision) return false;
+        if (tileDef.collision === true) return true;
+        if (typeof tileDef.collision === 'object') {
+            return !!(tileDef.collision.top || tileDef.collision.bottom || tileDef.collision.left || tileDef.collision.right);
+        }
+        return false;
+    };
+
     // JAUNS: Pārbauda priekšmetu savākšanu
     const checkItemCollection = (currentX, currentY, mapWidth, objectLayerData) => {
         if (!objectLayerData) return;
@@ -170,8 +199,7 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
 
             // Ja tas ir "pickup" items un nav spēlētājs
             if (itemDef && itemDef.pickup && !itemId.includes('player')) {
-
-                // Loģika specifiskiem itemiem
+                // Health pickup
                 if (itemDef.effect && itemDef.effect.health) {
                     const healthBonus = parseInt(itemDef.effect.health, 10);
 
@@ -188,6 +216,17 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
                     if (onStateUpdate) {
                         onStateUpdate('collectItem', index);
                     }
+                    return;
+                }
+
+                // Fireball ammo pickup
+                if (itemDef.effect && itemDef.effect.fireball) {
+                    const ammoBonus = parseInt(itemDef.effect.fireball, 10) || 0;
+                    gameState.current.ammo = Math.max(0, (gameState.current.ammo || 0) + ammoBonus);
+                    if (onStateUpdate) {
+                        onStateUpdate('collectItem', index);
+                    }
+                    return;
                 }
             }
         }
@@ -325,6 +364,34 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
         }
     };
 
+    // Palīgfunkcija: izveidot jaunu šāviņu
+    const spawnProjectile = (originX, originY, direction) => {
+        const pDef = findItemById('fireball_basic');
+        const id = projectileIdRef.current++;
+        const w = Math.max(2, ((pDef?.width || 0.25) * TILE_SIZE));
+        const h = Math.max(2, ((pDef?.height || 0.25) * TILE_SIZE));
+        const speedPxPerSec = (pDef?.speed ? pDef.speed * 60 : 14 * 60);
+        const vx = (direction >= 0 ? 1 : -1) * speedPxPerSec;
+        const vy = 0;
+        const life = Math.max(200, pDef?.lifespan || 600);
+        const proj = {
+            id,
+            x: originX,
+            y: originY,
+            vx,
+            vy,
+            w,
+            h,
+            life,
+            defId: pDef?.id || 'fireball_basic',
+            dir: direction >= 0 ? 1 : -1,
+            // cache collision flags no reģistra
+            cwt: !!(pDef && pDef.collisionWithTiles),
+            hbs: Math.max(0.1, Math.min(1.0, (pDef?.hitboxScale ?? 1)))
+        };
+        projectilesRef.current.push(proj);
+    };
+
     // Game Loop
     const update = (timestamp) => {
         // Keep RAF alive even if init not finished yet
@@ -436,6 +503,131 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
         // JAUNS: Pārbaudām hazard damage pēc kustības
         checkHazardDamage(x, y, mapWidth, objectData, deltaMs);
 
+        // JAUNS: Šaušana ar peli (kreisā poga)
+        shootCooldownRef.current = Math.max(0, (shootCooldownRef.current || 0) - deltaMs);
+        const SHOOT_COOLDOWN_MS = 160; // vienkāršs cooldown
+        if (keys.mouseLeft && shootCooldownRef.current <= 0 && (gameState.current.ammo || 0) > 0) {
+            // izšaujam no spēlētāja centra malas atkarībā no virziena
+            const originX = x + (direction >= 0 ? (width) : 0);
+            const originY = y + height * 0.5;
+            spawnProjectile(originX, originY, direction);
+            gameState.current.ammo = Math.max(0, (gameState.current.ammo || 0) - 1);
+            shootCooldownRef.current = SHOOT_COOLDOWN_MS;
+        }
+
+            // JAUNS: Atjaunojam šāviņus (ar rikošeta fiziku pret flīzēm)
+        const dtProj = deltaMs / 1000;
+        const worldW = mapWidth * TILE_SIZE;
+        const worldH = mapHeight * TILE_SIZE;
+
+        // Palīgfunkcija: AABB cietuma pārbaude punktiem (4 stūri)
+        const isSolidRect = (cx, cy, hw, hh) => {
+            const pts = [
+                { x: cx - hw, y: cy - hh },
+                { x: cx + hw, y: cy - hh },
+                { x: cx - hw, y: cy + hh },
+                { x: cx + hw, y: cy + hh },
+            ];
+            for (let k = 0; k < pts.length; k++) {
+                const pt = pts[k];
+                if (isSolidAtPixel(pt.x, pt.y, mapWidth, mapHeight)) return true;
+            }
+            return false;
+        };
+
+        if (projectilesRef.current.length) {
+            for (let i = projectilesRef.current.length - 1; i >= 0; i--) {
+                const p = projectilesRef.current[i];
+
+                // Bāzes parametri rikošetiem
+                if (p.bounces == null) p.bounces = 0;
+                const maxBounces = Number.isFinite(p.maxBounces) ? p.maxBounces : (findItemById(p.defId)?.maxBounces ?? 3);
+                const bounceDamp = Number.isFinite(p.bounceDamping) ? p.bounceDamping : (findItemById(p.defId)?.bounceDamping ?? 0.6);
+                const ricRand = Number.isFinite(p.ricochetRandom) ? p.ricochetRandom : (findItemById(p.defId)?.ricochetRandom ?? 0.15);
+
+                // Aprēķinām apakš-soļus pēc ātruma, lai izvairītos no tuneļa efekta
+                const maxDelta = Math.max(Math.abs(p.vx * dtProj), Math.abs(p.vy * dtProj));
+                let steps = Math.ceil(maxDelta / 4);
+                if (!Number.isFinite(steps) || steps < 1) steps = 1;
+                steps = Math.min(steps, 20);
+                const stepTime = dtProj / steps;
+
+                let cx = p.x;
+                let cy = p.y;
+                const hw = (p.w * (p.hbs || 1)) * 0.5;
+                const hh = (p.h * (p.hbs || 1)) * 0.5;
+
+                let removed = false;
+
+                for (let s = 0; s < steps; s++) {
+                    // 1) kustība pa X
+                    let nextX = cx + p.vx * stepTime;
+                    if (p.cwt && isSolidRect(nextX, cy, hw, hh)) {
+                        // rikošets pa X asi
+                        p.vx = -p.vx * bounceDamp;
+                        // neliels trajektorijas sajaukums (atkarīgs no kopējā ātruma)
+                        const sp = Math.max(40, Math.hypot(p.vx, p.vy));
+                        const jitter = (Math.random() * 2 - 1) * sp * ricRand;
+                        p.vy += jitter * 0.15;
+                        p.bounces += 1;
+                        p.life = Math.max(0, p.life - 80); // saīsina mūžu pēc trieciena
+                        // neatjauninām X pozīciju šajā apakšsolī (paliek pie sienas malas)
+                    } else {
+                        cx = nextX;
+                    }
+
+                    // 2) kustība pa Y
+                    let nextY = cy + p.vy * stepTime;
+                    if (p.cwt && isSolidRect(cx, nextY, hw, hh)) {
+                        // rikošets pa Y asi
+                        p.vy = -p.vy * bounceDamp;
+                        const sp = Math.max(40, Math.hypot(p.vx, p.vy));
+                        const jitter = (Math.random() * 2 - 1) * sp * ricRand;
+                        p.vx += jitter * 0.15;
+                        p.bounces += 1;
+                        p.life = Math.max(0, p.life - 80);
+                        // neatjauninām Y pozīciju šajā apakšsolī
+                    } else {
+                        cy = nextY;
+                    }
+
+                    // Aizsardzība pret iesprūšanu stūros: ja nokļūst solīdā, atbīdam atpakaļ un atspoguļojam abas ass
+                    if (p.cwt && isSolidRect(cx, cy, hw, hh)) {
+                        // atspoguļojam abas asis un pabīdam minimāli ārā
+                        p.vx = -p.vx * bounceDamp;
+                        p.vy = -p.vy * bounceDamp;
+                        p.bounces += 1;
+                        cx -= Math.sign(p.vx || 1) * 0.5;
+                        cy -= Math.sign(p.vy || 1) * 0.5;
+                    }
+
+                    // pārtraucam, ja pārsniegts bounces limits vai mazs ātrums
+                    const speedNow = Math.hypot(p.vx, p.vy);
+                    if (p.bounces >= maxBounces || speedNow < 40) {
+                        removed = true;
+                        break;
+                    }
+                }
+
+                if (removed) {
+                    projectilesRef.current.splice(i, 1);
+                    continue;
+                }
+
+                // pabeidzam atjaunināšanu
+                p.x = cx;
+                p.y = cy;
+                p.life -= deltaMs;
+                // atjauninām sprite virzienu
+                p.dir = (p.vx >= 0 ? 1 : -1);
+
+                // robežas un dzīves laiks
+                if (p.life <= 0 || p.x < -64 || p.x > worldW + 64 || p.y < -64 || p.y > worldH + 64) {
+                    projectilesRef.current.splice(i, 1);
+                }
+            }
+        }
+
         // JAUNS: Game Over pārbaude pēc health (hazardi, u.c.)
         if (gameState.current.health <= 0) {
             gameState.current.health = 0;
@@ -450,8 +642,7 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
         }
 
         // JAUNS: Game Over pārbaude - ja nokrīt zem kartes
-        const mapPixelHeight = mapHeight * TILE_SIZE;
-        if (y > mapPixelHeight + 100) {
+        if (y > worldH + 100) {
             if (onGameOver) {
                 onGameOver();
             }
@@ -478,7 +669,7 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
         };
 
         // React state atjaunojam, lai notiktu renderēšana
-        setPlayer({ ...gameState.current });
+        setPlayer({ ...gameState.current, projectiles: projectilesRef.current.slice(0) });
 
         // Nākamais frame
         requestRef.current = requestAnimationFrame(update);

@@ -6,7 +6,8 @@ export const useInput = () => {
         a: false,
         s: false,
         d: false,
-        space: false
+        space: false,
+        mouseLeft: false
     });
 
     useEffect(() => {
@@ -20,6 +21,7 @@ export const useInput = () => {
             keys.current.s = false;
             keys.current.d = false;
             keys.current.space = false;
+            keys.current.mouseLeft = false;
         };
 
         const handleKeyDown = (e) => {
@@ -76,6 +78,19 @@ export const useInput = () => {
             }
         };
 
+        const handleMouseDown = (e) => {
+            // Left button only
+            if (e.button !== 0) return;
+            if (isTerminalOpen()) return;
+            keys.current.mouseLeft = true;
+        };
+
+        const handleMouseUp = (e) => {
+            if (e.button !== 0) return;
+            if (isTerminalOpen()) return;
+            keys.current.mouseLeft = false;
+        };
+
         const handleKeyUp = (e) => {
             // Allow closing terminal with Escape (terminal component also handles it)
             if (e.code === 'Escape') return;
@@ -109,11 +124,15 @@ export const useInput = () => {
         window.addEventListener('keydown', handleKeyDown, { passive: false });
         window.addEventListener('keyup', handleKeyUp, { passive: false });
         window.addEventListener('game-toggle-terminal', onToggleTerminal);
+        window.addEventListener('mousedown', handleMouseDown, { passive: true });
+        window.addEventListener('mouseup', handleMouseUp, { passive: true });
 
         return () => {
             window.removeEventListener('keydown', handleKeyDown, { passive: false });
             window.removeEventListener('keyup', handleKeyUp, { passive: false });
             window.removeEventListener('game-toggle-terminal', onToggleTerminal);
+            window.removeEventListener('mousedown', handleMouseDown, { passive: true });
+            window.removeEventListener('mouseup', handleMouseUp, { passive: true });
         };
     }, []);
 
