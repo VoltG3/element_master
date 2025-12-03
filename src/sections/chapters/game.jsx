@@ -14,9 +14,10 @@ import map3 from '../../assets/maps/Temp_03.json';
 import map4 from '../../assets/maps/Temp_04.json';
 import map5 from '../../assets/maps/Temp_05.json';
 import map6 from '../../assets/maps/Temp_06.json';
+import map7 from '../../assets/maps/Temp_07.json';
 
 // Simulējam failu sarakstu no mapes
-const BUILT_IN_MAPS = [map1, map2, map3, map4, map5, map6];
+const BUILT_IN_MAPS = [map1, map2, map3, map4, map5, map6, map7];
 
 export default function Game() {
     const viewportRef = useRef(null);
@@ -161,12 +162,15 @@ export default function Game() {
     // Mirror current effective runtime settings for other components to read (like GameSettings)
     useEffect(() => {
         try {
+            const clouds = (runtimeSettings.weatherClouds ?? runtimeSettings.weatherFog ?? 0);
             window.__GAME_RUNTIME_SETTINGS__ = {
                 ...(window.__GAME_RUNTIME_SETTINGS__ || {}),
                 backgroundParallaxFactor: (runtimeSettings.backgroundParallaxFactor ?? activeMapData?.meta?.backgroundParallaxFactor ?? 0.3),
                 weatherRain: (runtimeSettings.weatherRain ?? 0),
                 weatherSnow: (runtimeSettings.weatherSnow ?? 0),
-                weatherFog: (runtimeSettings.weatherFog ?? 0),
+                weatherClouds: clouds,
+                // legacy mirror for compatibility (e.g., older UI)
+                weatherFog: clouds,
             };
         } catch {}
     }, [runtimeSettings, activeMapData]);
@@ -298,7 +302,7 @@ export default function Game() {
                             cameraScrollX={cameraScrollX}
                             weatherRain={runtimeSettings.weatherRain ?? 0}
                             weatherSnow={runtimeSettings.weatherSnow ?? 0}
-                            weatherFog={runtimeSettings.weatherFog ?? 0}
+                            weatherClouds={runtimeSettings.weatherClouds ?? runtimeSettings.weatherFog ?? 0}
                         />
 
                     </div>

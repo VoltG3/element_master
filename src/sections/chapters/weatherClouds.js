@@ -1,19 +1,20 @@
 import { Graphics, BlurFilter } from 'pixi.js';
 
-// Fog overlay: uneven semi-transparent patches drifting slowly with varying alpha.
-export default class WeatherFog {
+// Clouds overlay: organic cloud blobs drifting in the top 30% of the screen.
+export default class WeatherClouds {
   constructor(container, api, getIntensity) {
     this.container = container;
     this.api = api;
     this.getIntensity = getIntensity || (() => 0);
     this.width = api.mapWidth * api.tileSize;
     this.height = api.mapHeight * api.tileSize;
+    this.bandHeight = Math.max(1, Math.floor(this.height * 0.3)); // top 30%
     this.patches = [];
     this.intensity = 0;
 
-    // Soft blur for nicer fog appearance
+    // Soft blur for nicer cloud appearance
     try {
-      this.container.filters = [new BlurFilter({ strength: 2.2, quality: 2 })];
+      this.container.filters = [new BlurFilter({ strength: 2.0, quality: 2 })];
     } catch {}
 
     this.rebuild();
@@ -34,33 +35,33 @@ export default class WeatherFog {
     }
     this.patches = [];
 
-    const count = Math.round((this.intensity / 100) * 20); // slightly more patches for smoother look
+    const count = Math.round((this.intensity / 100) * 18); // a bit fewer than fog by default
     for (let i = 0; i < count; i++) {
       const g = new Graphics();
-      const w = 100 + Math.random() * 240; // patch size
-      const h = 70 + Math.random() * 180;
+      const w = 140 + Math.random() * 300; // cloud size
+      const h = 80 + Math.random() * 160;
       const x = Math.random() * (this.width + 200) - 100;
-      const y = Math.random() * (this.height + 120) - 60;
-      const alpha = 0.06 + (this.intensity / 100) * (0.14 + Math.random() * 0.12); // a bit softer base, overlaps will thicken
-      const speed = 4 + Math.random() * 18; // px/s drift
-      const vy = (Math.random() - 0.5) * 6; // slight vertical drift
+      const y = -40 + Math.random() * (this.bandHeight - 20); // only in band
+      const alpha = 0.08 + (this.intensity / 100) * (0.12 + Math.random() * 0.08);
+      const speed = 8 + Math.random() * 22; // horizontal drift speed
+      const vy = (Math.random() - 0.5) * 4; // subtle vertical drift
 
-      // Draw an organic blob using multiple overlapping circles (no sharp edges)
-      g.beginFill(0x9fb7c9, 1.0);
+      // Draw an organic cloud using overlapping circles (soft edges)
+      g.beginFill(0xffffff, 1.0);
       const rx = w * 0.5;
       const ry = h * 0.5;
-      const circles = 7 + Math.floor(Math.random() * 5); // 7..11 lobes
-      const baseR = Math.min(rx, ry) * 0.5;
+      const circles = 8 + Math.floor(Math.random() * 6); // 8..13 lobes
+      const baseR = Math.min(rx, ry) * 0.55;
       for (let k = 0; k < circles; k++) {
         const t = (k / circles) * Math.PI * 2 + Math.random() * 0.6;
-        const dist = 0.25 + Math.random() * 0.35; // how far from center
+        const dist = 0.2 + Math.random() * 0.35;
         const cx = Math.cos(t) * rx * dist;
         const cy = Math.sin(t) * ry * dist;
-        const r = baseR * (0.8 + Math.random() * 0.7);
+        const r = baseR * (0.7 + Math.random() * 0.7);
         g.drawCircle(cx, cy, r);
       }
-      // Add a soft core to avoid donut shapes
-      g.drawCircle(0, 0, baseR * (0.7 + Math.random() * 0.4));
+      // central mass
+      g.drawCircle(0, 0, baseR * (0.9 + Math.random() * 0.5));
       g.endFill();
       g.alpha = alpha;
       g.x = x;
@@ -77,22 +78,24 @@ export default class WeatherFog {
 
     const dt = dtMs / 1000;
     const W = this.width;
-    const H = this.height;
+    const bandTop = -100; // allow spawn/wrap margin above
+    const bandBottom = this.bandHeight - 20; // keep away from lower area
     for (const p of this.patches) {
       // drift
       p.g.x += p.vx * dt;
       p.g.y += p.vy * dt;
 
-      // gentle alpha oscillation for unevenness
-      p.phase += dt * 0.5;
+      // very gentle alpha oscillation
+      p.phase += dt * 0.35;
       const osc = (Math.sin(p.phase) + 1) * 0.5; // 0..1
-      p.g.alpha = Math.max(0.02, Math.min(0.6, p.alpha * (0.7 + 0.6 * osc)));
+      p.g.alpha = Math.max(0.04, Math.min(0.55, p.alpha * (0.75 + 0.5 * osc)));
 
-      // wrap around edges to keep fog continuous
-      if (p.g.x < -150) p.g.x = W + 150;
-      if (p.g.x > W + 150) p.g.x = -150;
-      if (p.g.y < -100) p.g.y = H + 100;
-      if (p.g.y > H + 100) p.g.y = -100;
+      // wrap horizontally
+      if (p.g.x < -180) p.g.x = W + 180;
+      if (p.g.x > W + 180) p.g.x = -180;
+      // constrain within top band vertically (wrap within band only)
+      if (p.g.y < bandTop) p.g.y = bandBottom;
+      if (p.g.y > bandBottom) p.g.y = bandTop;
     }
   }
 

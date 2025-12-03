@@ -9,8 +9,10 @@ export default class WeatherRain {
     this.width = api.mapWidth * api.tileSize;
     this.height = api.mapHeight * api.tileSize;
     this.particles = [];
-    this.spawnAcc = 0;
     this.intensity = 0;
+    const area = this.width * this.height;
+    // Reasonable particle cap depending on map area to keep FPS stable
+    this.maxParticles = Math.max(160, Math.floor(area / 2600));
   }
 
   setIntensity(v) {
@@ -22,13 +24,14 @@ export default class WeatherRain {
     g.clear();
     // Draw a thin slanted line to mimic a raindrop motion blur
     g.lineStyle(0);
-    g.beginFill(0x4aa3ff, 0.9);
-    g.drawRect(0, 0, 1.2, 6);
+    g.beginFill(0x4aa3ff, 0.92);
+    // Slightly longer/brighter to be more visible
+    g.drawRect(0, 0, 1.3, 9);
     g.endFill();
     const x = Math.random() * this.width;
     const y = -10 - Math.random() * 30;
-    const speed = 400 + Math.random() * 400; // px/s, different speeds for depth
-    const vx = (Math.random() * 40 - 20); // slight wind
+    const speed = 520 + Math.random() * 520; // px/s, different speeds for depth
+    const vx = (Math.random() * 60 - 30); // slight wind
     const vy = speed;
     g.x = x;
     g.y = y;
@@ -41,11 +44,30 @@ export default class WeatherRain {
     // adjust intensity dynamically
     this.setIntensity(this.getIntensity());
 
-    const ratePerSecond = (this.intensity / 100) * (this.width / 6); // width-scaled spawn rate
-    this.spawnAcc += ratePerSecond * (dtMs / 1000);
-    while (this.spawnAcc >= 1) {
-      this.spawnOne();
-      this.spawnAcc -= 1;
+    // Constant-density controller: keep active particles near target count
+    const norm = Math.max(0, Math.min(1, this.intensity / 100));
+    const scaled = Math.pow(norm, 1.15);
+    let target = Math.floor(this.maxParticles * scaled);
+    if (scaled > 0 && target < 8) target = 8; // small baseline so low intensity still visible
+
+    const deficit = target - this.particles.length;
+    if (deficit > 0) {
+      // Smooth ramp, spawn only a fraction per frame to avoid bursts
+      const maxPerFrame = 48;
+      const smooth = Math.max(1, Math.ceil(target * 0.02));
+      const toSpawn = Math.min(deficit, smooth, maxPerFrame);
+      for (let i = 0; i < toSpawn; i++) this.spawnOne();
+    }
+    // Gentle over-target culling to keep density steady
+    if (this.particles.length > target) {
+      const surplus = this.particles.length - target;
+      const toCull = Math.min(surplus, Math.max(1, Math.ceil(this.particles.length * 0.02)));
+      for (let i = 0; i < toCull; i++) {
+        const p = this.particles.pop();
+        if (!p) break;
+        try { p.g.parent && p.g.parent.removeChild(p.g); } catch {}
+        try { p.g.destroy(); } catch {}
+      }
     }
 
     const gAcc = 1800; // gravity px/s^2

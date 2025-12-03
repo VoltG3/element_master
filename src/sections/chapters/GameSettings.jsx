@@ -30,11 +30,17 @@ export default function GameSettings() {
     } catch {}
     return 0;
   });
-  const [fog, setFog] = useState(() => {
+  const [clouds, setClouds] = useState(() => {
     try {
-      const ls = localStorage.getItem('game_weather_fog');
-      if (ls !== null) return Math.max(0, Math.min(100, parseInt(ls, 10) || 0));
+      // New key first
+      const lsNew = localStorage.getItem('game_weather_clouds');
+      if (lsNew !== null) return Math.max(0, Math.min(100, parseInt(lsNew, 10) || 0));
+      // Backward compatibility: read old fog key if exists
+      const lsOld = localStorage.getItem('game_weather_fog');
+      if (lsOld !== null) return Math.max(0, Math.min(100, parseInt(lsOld, 10) || 0));
       const g = window.__GAME_RUNTIME_SETTINGS__;
+      // Prefer clouds but also accept legacy fog
+      if (g && typeof g.weatherClouds === 'number') return Math.max(0, Math.min(100, g.weatherClouds));
       if (g && typeof g.weatherFog === 'number') return Math.max(0, Math.min(100, g.weatherFog));
     } catch {}
     return 0;
@@ -81,7 +87,8 @@ export default function GameSettings() {
         }
         if (typeof g.weatherRain === 'number') setRain(Math.max(0, Math.min(100, g.weatherRain)));
         if (typeof g.weatherSnow === 'number') setSnow(Math.max(0, Math.min(100, g.weatherSnow)));
-        if (typeof g.weatherFog === 'number') setFog(Math.max(0, Math.min(100, g.weatherFog)));
+        if (typeof g.weatherClouds === 'number') setClouds(Math.max(0, Math.min(100, g.weatherClouds)));
+        else if (typeof g.weatherFog === 'number') setClouds(Math.max(0, Math.min(100, g.weatherFog)));
       } catch {}
       // Auto-close the in-game terminal when settings opens
       try { window.dispatchEvent(new CustomEvent('game-close-terminal')); } catch {}
@@ -298,21 +305,21 @@ export default function GameSettings() {
             <span style={{ fontSize: 12, width: 34, textAlign: 'right' }}>{Number.isFinite(snow) ? snow : 0}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <label style={{ fontSize: 12, width: 120 }}>Migla (Fog)</label>
+            <label style={{ fontSize: 12, width: 120 }}>Mākoņi (Clouds)</label>
             <input
               type="range"
               min="0"
               max="100"
               step="1"
-              value={Number.isFinite(fog) ? fog : 0}
+              value={Number.isFinite(clouds) ? clouds : 0}
               onChange={(e) => {
                 const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
-                setFog(v);
-                try { localStorage.setItem('game_weather_fog', String(v)); } catch {}
-                emitUpdate({ weatherFog: v });
+                setClouds(v);
+                try { localStorage.setItem('game_weather_clouds', String(v)); } catch {}
+                emitUpdate({ weatherClouds: v });
               }}
             />
-            <span style={{ fontSize: 12, width: 34, textAlign: 'right' }}>{Number.isFinite(fog) ? fog : 0}</span>
+            <span style={{ fontSize: 12, width: 34, textAlign: 'right' }}>{Number.isFinite(clouds) ? clouds : 0}</span>
           </div>
         </section>
         <section>

@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Application, Container, Sprite, Texture, AnimatedSprite, Assets, TilingSprite, WRAP_MODES, BlurFilter, Graphics } from 'pixi.js';
 import WeatherRain from './weatherRain';
 import WeatherSnow from './weatherSnow';
-import WeatherFog from './weatherFog';
+import WeatherClouds from './weatherClouds';
 
 // Suppress noisy Pixi Assets warnings for inlined data URLs (we load textures directly)
 Assets.setPreferences?.({ skipCacheIdWarning: true });
@@ -31,7 +31,7 @@ const PixiStage = ({
   cameraScrollX = 0,
   weatherRain = 0,
   weatherSnow = 0,
-  weatherFog = 0,
+  weatherClouds = 0,
 }) => {
   const mountRef = useRef(null);
   const appRef = useRef(null);
@@ -44,8 +44,8 @@ const PixiStage = ({
   const playerRef = useRef(null);
   const playerStateRef = useRef(null);
   const weatherLayerRef = useRef(null);
-  const fogLayerRef = useRef(null);
-  const weatherSystemsRef = useRef({ rain: null, snow: null, fog: null });
+  const fogLayerRef = useRef(null); // reused as clouds overlay layer
+  const weatherSystemsRef = useRef({ rain: null, snow: null, clouds: null });
 
   // keep latest player state and camera scroll for ticker without re-subscribing
   useEffect(() => {
@@ -172,7 +172,11 @@ const PixiStage = ({
 
   // Solid collision helper for world tiles (used by weather systems)
   const isSolidAt = (wx, wy) => {
-    if (wx < 0 || wy < 0) return true; // treat outside top/left as solid to avoid spawning issues
+    // Allow particles (snow/rain) to spawn above the top edge and fall into the world.
+    // Negative Y should NOT be treated as solid, otherwise flakes will "settle" off-screen.
+    if (wy < 0) return false;
+    // Keep left-of-world as solid to avoid pushing from outside horizontally.
+    if (wx < 0) return true;
     const gx = Math.floor(wx / tileSize);
     const gy = Math.floor(wy / tileSize);
     if (gx < 0 || gy < 0 || gx >= mapWidth || gy >= mapHeight) return false; // below world is not solid
@@ -224,7 +228,7 @@ const PixiStage = ({
       app.stage.addChild(obj);
       app.stage.addChild(playerLayer);
       app.stage.addChild(weatherLayer); // rain/snow above player
-      app.stage.addChild(fogLayer); // fog overlay on top
+      app.stage.addChild(fogLayer); // clouds overlay on top
 
       weatherLayerRef.current = weatherLayer;
       fogLayerRef.current = fogLayer;
@@ -336,7 +340,7 @@ const PixiStage = ({
         const systems = weatherSystemsRef.current;
         if (systems.rain) systems.rain.update(dt);
         if (systems.snow) systems.snow.update(dt);
-        if (systems.fog) systems.fog.update(dt);
+        if (systems.clouds) systems.clouds.update(dt);
       });
     };
 
@@ -513,15 +517,15 @@ const PixiStage = ({
     const api = { isSolidAt, mapWidth, mapHeight, tileSize };
     const getRainIntensity = () => Math.max(0, Math.min(100, Number(weatherRain) || 0));
     const getSnowIntensity = () => Math.max(0, Math.min(100, Number(weatherSnow) || 0));
-    const getFogIntensity = () => Math.max(0, Math.min(100, Number(weatherFog) || 0));
+    const getCloudsIntensity = () => Math.max(0, Math.min(100, Number(weatherClouds) || 0));
 
     // Always reset systems to apply possible dimension changes cleanly
     try { weatherSystemsRef.current.rain?.destroy(); } catch {}
     try { weatherSystemsRef.current.snow?.destroy(); } catch {}
-    try { weatherSystemsRef.current.fog?.destroy(); } catch {}
+    try { weatherSystemsRef.current.clouds?.destroy(); } catch {}
     weatherSystemsRef.current.rain = null;
     weatherSystemsRef.current.snow = null;
-    weatherSystemsRef.current.fog = null;
+    weatherSystemsRef.current.clouds = null;
 
     // Rain
     if (getRainIntensity() > 0) {
@@ -545,18 +549,18 @@ const PixiStage = ({
       weatherSystemsRef.current.snow = null;
     }
 
-    // Fog
-    if (getFogIntensity() > 0) {
-      if (!weatherSystemsRef.current.fog) {
-        weatherSystemsRef.current.fog = new WeatherFog(fogLayer, api, getFogIntensity);
+    // Clouds
+    if (getCloudsIntensity() > 0) {
+      if (!weatherSystemsRef.current.clouds) {
+        weatherSystemsRef.current.clouds = new WeatherClouds(fogLayer, api, getCloudsIntensity);
       }
-      weatherSystemsRef.current.fog.setIntensity(getFogIntensity());
+      weatherSystemsRef.current.clouds.setIntensity(getCloudsIntensity());
     } else {
-      weatherSystemsRef.current.fog?.destroy();
-      weatherSystemsRef.current.fog = null;
+      weatherSystemsRef.current.clouds?.destroy();
+      weatherSystemsRef.current.clouds = null;
     }
 
-  }, [weatherRain, weatherSnow, weatherFog, mapWidth, mapHeight, tileSize, tileMapData]);
+  }, [weatherRain, weatherSnow, weatherClouds, mapWidth, mapHeight, tileSize, tileMapData]);
 
   // Rebuild parallax when props change
   useEffect(() => {
