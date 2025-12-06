@@ -119,6 +119,10 @@ export function checkHazardDamage({
     if (!triggeredHazardsRef.current.has(index)) {
       triggeredHazardsRef.current.add(index);
       gameState.current.health = Math.max(0, gameState.current.health - baseDamage);
+      // Mark player as hit to trigger temporary target animation
+      const HIT_FLASH_MS = 500;
+      const prev = Number(gameState.current.hitTimerMs) || 0;
+      gameState.current.hitTimerMs = Math.max(prev, HIT_FLASH_MS);
       if (touch.top) {
         gameState.current.vy = -JUMP_FORCE * 0.4;
       } else if (touch.left) {
@@ -138,6 +142,10 @@ export function checkHazardDamage({
     while (hazardDamageAccumulatorRef.current >= TICK_MS) {
       hazardDamageAccumulatorRef.current -= TICK_MS;
       gameState.current.health = Math.max(0, gameState.current.health - dps);
+      // Refresh hit timer on each damage tick
+      const HIT_FLASH_MS = 500;
+      const prev = Number(gameState.current.hitTimerMs) || 0;
+      gameState.current.hitTimerMs = Math.max(prev, HIT_FLASH_MS);
     }
   }
 }

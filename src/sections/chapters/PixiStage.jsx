@@ -49,7 +49,8 @@ const PixiStage = ({
   const bgChunkLayerRef = useRef(null); // TileChunkLayer instance
   const objBehindRef = useRef(null); // objects behind player
   const objFrontRef = useRef(null);  // objects above player
-  const playerRef = useRef(null);
+  const playerRef = useRef(null); // container holding default/target sprites
+  const playerSpriteRefs = useRef({ def: null, hit: null });
   const playerStateRef = useRef(null);
   const weatherLayerRef = useRef(null);
   const fogLayerRef = useRef(null); // reused as clouds overlay layer
@@ -244,32 +245,48 @@ const PixiStage = ({
         console.warn('Pixi Assets preload encountered an issue (continuing):', e);
       }
 
-      // Create player sprite container
-      let playerSprite = null;
-      if (playerVisuals) {
-        if (Array.isArray(playerVisuals.textures) && playerVisuals.textures.length > 1) {
-          const frames = playerVisuals.textures.map((u) => getTexture(u)).filter(Boolean);
+      // Create player container with two variants: default and hit (target)
+      const playerContainer = new Container();
+      playerLayer.addChild(playerContainer);
+
+      const buildSpriteFromDef = (def) => {
+        if (!def) return null;
+        let spr = null;
+        if (Array.isArray(def.textures) && def.textures.length > 1) {
+          const frames = def.textures.map((u) => getTexture(u)).filter(Boolean);
           if (frames.length > 0) {
-            playerSprite = new AnimatedSprite(frames);
-            playerSprite.animationSpeed = msToSpeed(playerVisuals.animationSpeed);
-            playerSprite.play();
+            spr = new AnimatedSprite(frames);
+            spr.animationSpeed = msToSpeed(def.animationSpeed);
+            spr.play();
           }
         }
-        if (!playerSprite) {
-          const tex = getTexture(playerVisuals.texture) || Texture.WHITE;
-          playerSprite = new Sprite(tex);
+        if (!spr) {
+          const tex = getTexture(def.texture) || Texture.WHITE;
+          spr = new Sprite(tex);
         }
-      } else {
-        // fallback placeholder
-        playerSprite = new Sprite(Texture.WHITE);
-        playerSprite.tint = 0x00ff00;
-        playerSprite.width = tileSize;
-        playerSprite.height = tileSize;
-      }
+        spr.anchor.set(0, 0);
+        return spr;
+      };
 
-      playerSprite.anchor.set(0, 0); // align top-left to match DOM positioning
-      playerLayer.addChild(playerSprite);
-      playerRef.current = playerSprite;
+      // Default visuals from prop
+      const defaultDef = playerVisuals || null;
+      // Target visuals: try specific IDs
+      const targetDef = Array.isArray(registryItems)
+        ? (registryItems.find(r => r.id === 'player_target_100') || registryItems.find(r => r.id === 'player_target'))
+        : null;
+
+      const defSprite = buildSpriteFromDef(defaultDef) || new Sprite(Texture.WHITE);
+      const hitSprite = buildSpriteFromDef(targetDef) || null;
+
+      playerContainer.addChild(defSprite);
+      if (hitSprite) playerContainer.addChild(hitSprite);
+
+      // Initial visibility
+      defSprite.visible = true;
+      if (hitSprite) hitSprite.visible = false;
+
+      playerRef.current = playerContainer;
+      playerSpriteRefs.current = { def: defSprite, hit: hitSprite };
 
       // Mount canvas
       if (mountRef.current) {
@@ -300,15 +317,27 @@ const PixiStage = ({
         const s = playerStateRef.current;
         // Update player sprite if available
         if (s && playerRef.current) {
-          const p = playerRef.current;
-          if (s.width) p.width = s.width;
-          if (s.height) p.height = s.height;
+          const container = playerRef.current;
+          const { def, hit } = playerSpriteRefs.current || {};
+
+          // Resize child sprites to match player state
+          if (def) { if (s.width) def.width = s.width; if (s.height) def.height = s.height; }
+          if (hit) { if (s.width) hit.width = s.width; if (s.height) hit.height = s.height; }
+
+          // Choose which is visible based on hit timer
+          const isHit = Number(s.hitTimerMs) > 0 && !!hit;
+          if (def) def.visible = !isHit;
+          if (hit) hit.visible = isHit;
+
+          // Direction flip is applied to the container
           const dir = s.direction || 1;
-          const mag = Math.abs(p.scale.x || 1);
-          p.scale.x = dir >= 0 ? mag : -mag;
-          const effectiveWidth = s.width || p.width || tileSize;
-          p.x = dir >= 0 ? (s.x || 0) : ( (s.x || 0) + effectiveWidth );
-          p.y = s.y || 0;
+          const mag = Math.abs(container.scale.x || 1);
+          container.scale.x = dir >= 0 ? mag : -mag;
+
+          // Position container; when flipped, offset by width
+          const effectiveWidth = s.width || (def?.width) || tileSize;
+          container.x = dir >= 0 ? (s.x || 0) : ((s.x || 0) + effectiveWidth);
+          container.y = s.y || 0;
         }
 
         // Update parallax background tile offset based on camera scroll

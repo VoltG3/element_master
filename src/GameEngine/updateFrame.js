@@ -121,6 +121,11 @@ export function updateFrame(ctx, timestamp) {
   // 6) Update projectiles
   updateProjectiles(deltaMs, mapWidth, mapHeight);
 
+  // 6.5) Update transient timers (hit flash, etc.)
+  if (Number.isFinite(gameState.current.hitTimerMs)) {
+    gameState.current.hitTimerMs = Math.max(0, (gameState.current.hitTimerMs || 0) - deltaMs);
+  }
+
   // 7) Game over checks
   const worldH = mapHeight * TILE_SIZE;
   if (gameState.current.health <= 0) {
