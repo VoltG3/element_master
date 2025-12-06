@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useInput } from './useInput';
 import { findItemById } from '../GameRegistry';
-import { checkHazardDamage as checkHazardDamageExternal } from '../GameEngine/checkHazardDamage';
+import { checkHazardDamage } from '../GameEngine/checkHazardDamage';
 import { spawnProjectile as spawnProjectileExternal } from '../GameEngine/spawnProjectile';
 import { collectItem } from '../GameEngine/collectItem';
 import { updateProjectiles } from '../GameEngine/updateProjectiles';
@@ -99,6 +99,29 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
     // Palīgfunkcija: atskaņo SFX (deleģēts uz GameEngine/audio)
     const playShotSfx = (url, volume) => {
         return playSfx({ soundEnabledRef, audioCtxRef, audioCtxUnlockedRef }, url, volume);
+    };
+
+    // Adapteris: pareizi izsauc GameEngine/checkHazardDamage ar options objektu
+    const checkHazardDamageWrapper = (currentX, currentY, mapWidth, objectLayerData, deltaMs) => {
+        try {
+            return checkHazardDamage({
+                currentX,
+                currentY,
+                mapWidth,
+                objectLayerData,
+                deltaMs,
+                registryItems,
+                TILE_SIZE,
+                MOVE_SPEED,
+                JUMP_FORCE,
+                hazardDamageAccumulatorRef,
+                lastHazardIndexRef,
+                triggeredHazardsRef,
+                gameState
+            });
+        } catch (e) {
+            // klusais sargs — neļaujam spēlei apstāties, ja ir kļūda
+        }
     };
 
     // Inicializējam spēlētāju sākuma pozīcijā
@@ -214,25 +237,6 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
 
     // Item savākšana — pārcelta uz GameEngine/collectItem
 
-    // 🧨 JAUNS: Hazard apstrāde (damageOnce, damagePerSecond, damageDirections) — pārcelts uz atsevišķu moduli
-    const checkHazardDamage = (currentX, currentY, mapWidth, objectLayerData, deltaMs) => {
-        return checkHazardDamageExternal({
-            currentX,
-            currentY,
-            mapWidth,
-            objectLayerData,
-            deltaMs,
-            registryItems,
-            TILE_SIZE,
-            MOVE_SPEED,
-            JUMP_FORCE,
-            hazardDamageAccumulatorRef,
-            lastHazardIndexRef,
-            triggeredHazardsRef,
-            gameState
-        });
-    };
-
     // Palīgfunkcija: izveidot jaunu šāviņu — pārcelts uz atsevišķu moduli
     const spawnProjectile = (originX, originY, direction) => {
         return spawnProjectileExternal({
@@ -258,7 +262,7 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
                 collectItem: (x, y, mapWidth, objectLayer) =>
                     collectItem({ registryItems, TILE_SIZE, MAX_HEALTH, playShotSfx, onStateUpdate, gameState }, x, y, mapWidth, objectLayer),
                 checkHazardDamage: (x, y, mapWidth, objectLayer, deltaMs) =>
-                    checkHazardDamage(x, y, mapWidth, objectLayer, deltaMs),
+                    checkHazardDamageWrapper(x, y, mapWidth, objectLayer, deltaMs),
                 spawnProjectile: (originX, originY, direction) =>
                     spawnProjectile(originX, originY, direction),
                 updateProjectiles: (deltaMs, mapWidth, mapHeight) =>

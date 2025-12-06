@@ -24,75 +24,91 @@ export function checkHazardDamage({
   const width = gameState.current.width;
   const height = gameState.current.height;
 
-  const bottomCenterX = currentX + width / 2;
-  const bottomCenterY = currentY + height - 1;
-
-  const gridX = Math.floor(bottomCenterX / TILE_SIZE);
-  const gridY = Math.floor(bottomCenterY / TILE_SIZE);
-  const index = gridY * mapWidth + gridX;
-
-  if (index < 0 || index >= objectLayerData.length) {
-    hazardDamageAccumulatorRef.current = 0;
-    lastHazardIndexRef.current = null;
-    return;
-  }
-
-  const objId = objectLayerData[index];
-  if (!objId) {
-    hazardDamageAccumulatorRef.current = 0;
-    lastHazardIndexRef.current = null;
-    return;
-  }
-
-  const objDef = registryItems.find(r => r.id === objId);
-  if (!objDef || objDef.type !== 'hazard') {
-    hazardDamageAccumulatorRef.current = 0;
-    lastHazardIndexRef.current = null;
-    return;
-  }
-
+  // Player AABB in world pixels
   const playerLeft = currentX;
   const playerRight = currentX + width;
   const playerTop = currentY;
   const playerBottom = currentY + height;
 
-  const tileLeft = gridX * TILE_SIZE;
-  const tileRight = tileLeft + TILE_SIZE;
-  const tileTop = gridY * TILE_SIZE;
-  const tileBottom = tileTop + TILE_SIZE;
+  // Overlapped tile rectangle (inclusive)
+  const minGX = Math.floor(playerLeft / TILE_SIZE);
+  const maxGX = Math.floor((playerRight - 1) / TILE_SIZE);
+  const minGY = Math.floor(playerTop / TILE_SIZE);
+  const maxGY = Math.floor((playerBottom - 1) / TILE_SIZE);
 
-  const overlapsHorizontally = playerRight > tileLeft && playerLeft < tileRight;
-  const overlapsVertically = playerBottom > tileTop && playerTop < tileBottom;
-  if (!overlapsHorizontally || !overlapsVertically) {
-    hazardDamageAccumulatorRef.current = 0;
-    lastHazardIndexRef.current = null;
-    return;
-  }
+  // Collect candidate hazards that match direction rules
+  const candidates = [];
 
-  const touchingTop = playerBottom <= tileTop + 4 && playerBottom >= tileTop;
-  const touchingBottom = playerTop >= tileBottom - 4 && playerTop <= tileBottom;
-  const touchingLeft = playerRight <= tileRight && playerRight >= tileRight - 4;
-  const touchingRight = playerLeft >= tileLeft && playerLeft <= tileLeft + 4;
-
-  const dirs = objDef.damageDirections || {
-    top: true,
-    bottom: true,
-    left: true,
-    right: true
+  const pushCandidate = (idx, def, touch) => {
+    const dirs = def.damageDirections || { top: true, bottom: true, left: true, right: true };
+    const ok = (touch.top && dirs.top) || (touch.bottom && dirs.bottom) || (touch.left && dirs.left) || (touch.right && dirs.right);
+    if (!ok) return;
+    candidates.push({ index: idx, def, touch });
   };
 
-  const dirOK =
-    (touchingTop && dirs.top) ||
-    (touchingBottom && dirs.bottom) ||
-    (touchingLeft && dirs.left) ||
-    (touchingRight && dirs.right);
+  for (let gy = minGY; gy <= maxGY; gy++) {
+    for (let gx = minGX; gx <= maxGX; gx++) {
+      const idx = gy * mapWidth + gx;
+      if (idx < 0 || idx >= objectLayerData.length) continue;
+      const objId = objectLayerData[idx];
+      if (!objId) continue;
+      const def = registryItems.find(r => r.id === objId);
+      if (!def || def.type !== 'hazard') continue;
 
-  if (!dirOK) {
+      const tileLeft = gx * TILE_SIZE;
+      const tileRight = tileLeft + TILE_SIZE;
+      const tileTop = gy * TILE_SIZE;
+      const tileBottom = tileTop + TILE_SIZE;
+
+      const overlapsHorizontally = playerRight > tileLeft && playerLeft < tileRight;
+      const overlapsVertically = playerBottom > tileTop && playerTop < tileBottom;
+      if (!overlapsHorizontally || !overlapsVertically) continue;
+
+      // Allow per-hazard touch margin; default 4px
+      let m = Number(def.touchMargin);
+      if (!Number.isFinite(m)) m = 4;
+      m = Math.max(1, Math.min(8, m));
+
+      let touchingTop = playerBottom >= tileTop && playerBottom <= tileTop + m;
+      let touchingBottom = playerTop <= tileBottom && playerTop >= tileBottom - m;
+      let touchingLeft = playerRight >= tileRight - m && playerRight <= tileRight;
+      let touchingRight = playerLeft <= tileLeft + m && playerLeft >= tileLeft;
+
+      // Fallback: if overlapping but no margin edge is touched (player inside tile),
+      // infer the contact side by the smallest penetration distance to that edge.
+      if (!touchingTop && !touchingBottom && !touchingLeft && !touchingRight) {
+        const distTop = Math.abs(playerBottom - tileTop);
+        const distBottom = Math.abs(tileBottom - playerTop);
+        const distLeft = Math.abs(playerRight - tileLeft);
+        const distRight = Math.abs(tileRight - playerLeft);
+        const min = Math.min(distTop, distBottom, distLeft, distRight);
+        touchingTop = (min === distTop);
+        touchingBottom = (!touchingTop && min === distBottom);
+        touchingLeft = (!touchingTop && !touchingBottom && min === distLeft);
+        touchingRight = (!touchingTop && !touchingBottom && !touchingLeft);
+      }
+
+      pushCandidate(idx, def, { top: touchingTop, bottom: touchingBottom, left: touchingLeft, right: touchingRight });
+    }
+  }
+
+  if (candidates.length === 0) {
+    // No valid hazard contact this frame
     hazardDamageAccumulatorRef.current = 0;
     lastHazardIndexRef.current = null;
     return;
   }
 
+  // Choose deterministic candidate: prefer top > bottom > left > right
+  const sideScore = (t) => (t.top ? 4 : 0) + (t.bottom ? 3 : 0) + (t.left ? 2 : 0) + (t.right ? 1 : 0);
+  candidates.sort((a, b) => sideScore(b.touch) - sideScore(a.touch));
+  const chosen = candidates[0];
+  const index = chosen.index;
+  const objDef = chosen.def;
+  const touch = chosen.touch;
+
+  // Update active hazard index
+  const prevIndex = lastHazardIndexRef.current;
   lastHazardIndexRef.current = index;
 
   const damageOnce = !!objDef.damageOnce;
@@ -102,26 +118,22 @@ export function checkHazardDamage({
   if (damageOnce) {
     if (!triggeredHazardsRef.current.has(index)) {
       triggeredHazardsRef.current.add(index);
-
       gameState.current.health = Math.max(0, gameState.current.health - baseDamage);
-
-      if (touchingTop) {
+      if (touch.top) {
         gameState.current.vy = -JUMP_FORCE * 0.4;
-      } else if (touchingLeft) {
+      } else if (touch.left) {
         gameState.current.vx = -MOVE_SPEED * 1.5;
-      } else if (touchingRight) {
+      } else if (touch.right) {
         gameState.current.vx = MOVE_SPEED * 1.5;
       }
-
       return;
     }
   } else {
-    hazardDamageAccumulatorRef.current += deltaMs;
-
-    if (lastHazardIndexRef.current !== index) {
+    // Continuous DPS: reset accumulator if we switched tiles
+    if (prevIndex !== index) {
       hazardDamageAccumulatorRef.current = 0;
     }
-
+    hazardDamageAccumulatorRef.current += deltaMs;
     const TICK_MS = 1000;
     while (hazardDamageAccumulatorRef.current >= TICK_MS) {
       hazardDamageAccumulatorRef.current -= TICK_MS;

@@ -14,9 +14,9 @@
 
   "damageDirections": {
     "top": true,
-    "bottom": false,
-    "left": false,
-    "right": false
+    "bottom": true,
+    "left": true,
+    "right": true
   }
 }
 
