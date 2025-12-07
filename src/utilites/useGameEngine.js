@@ -238,6 +238,21 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
         );
     };
 
+    // New: water presence check at a world pixel
+    const isWaterAtPixel = (wx, wy, mapWidthTiles, mapHeightTiles) => {
+        if (wy < 0) return false;
+        const gx = Math.floor(wx / TILE_SIZE);
+        const gy = Math.floor(wy / TILE_SIZE);
+        if (gx < 0 || gy < 0 || gx >= mapWidthTiles || gy >= mapHeightTiles) return false;
+        const idx = gy * mapWidthTiles + gx;
+        const id = tileData[idx];
+        if (!id) return false;
+        const def = registryItems.find(r => r.id === id);
+        if (!def) return false;
+        const flags = def.flags || {};
+        return !!(flags.water || flags.liquid);
+    };
+
     // Item savākšana — pārcelta uz GameEngine/collectItem
 
     // Palīgfunkcija: izveidot jaunu šāviņu — pārcelts uz atsevišķu moduli
@@ -260,7 +275,7 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
             input,
             refs: { gameState, isInitialized, lastTimeRef, projectilesRef, shootCooldownRef },
             constants: { TILE_SIZE, GRAVITY, TERMINAL_VELOCITY, MOVE_SPEED, JUMP_FORCE },
-            helpers: { checkCollision },
+            helpers: { checkCollision, isWaterAt: (wx, wy) => isWaterAtPixel(wx, wy, (mapData?.meta?.width || mapData?.width || 20), (mapData?.meta?.height || mapData?.height || 15)) },
             actions: {
                 collectItem: (x, y, mapWidth, objectLayer) =>
                     collectItem({ registryItems, TILE_SIZE, MAX_HEALTH, playShotSfx, onStateUpdate, gameState }, x, y, mapWidth, objectLayer),

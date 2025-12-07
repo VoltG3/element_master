@@ -30,7 +30,7 @@ export function updateFrame(ctx, timestamp) {
 
   const { gameState, isInitialized, lastTimeRef, projectilesRef, shootCooldownRef } = refs;
   const { TILE_SIZE, GRAVITY, TERMINAL_VELOCITY, MOVE_SPEED, JUMP_FORCE } = constants;
-  const { checkCollision } = helpers;
+  const { checkCollision, isWaterAt } = helpers;
   const { collectItem, checkHazardDamage, spawnProjectile, updateProjectiles, setPlayer, onGameOver } = actions;
 
   // Keep RAF alive even if init not finished yet
@@ -97,9 +97,21 @@ export function updateFrame(ctx, timestamp) {
     mapWidth,
     mapHeight,
     checkCollision,
-    vx
+    vx,
+    isWaterAt: (wx, wy) => {
+      try { return typeof isWaterAt === 'function' ? !!isWaterAt(wx, wy) : false; } catch { return false; }
+    },
+    prevInWater: !!gameState.current.inWater
   });
   y = vp.y; vy = vp.vy; isGrounded = vp.isGrounded; animation = vp.animation;
+  const inWater = !!vp.inWater;
+  const headUnderWater = !!vp.headUnderWater;
+  const atSurface = !!vp.atSurface;
+
+  // Extra horizontal damping when in water (simple model)
+  if (inWater) {
+    vx *= 0.82;
+  }
 
   // 3) Item collection
   collectItem(x, y, mapWidth, objectData);
@@ -155,7 +167,10 @@ export function updateFrame(ctx, timestamp) {
     vy,
     isGrounded,
     direction,
-    animation
+    animation,
+    inWater,
+    headUnderWater,
+    atSurface
   };
   setPlayer({ ...gameState.current, projectiles: projectilesRef.current.slice(0) });
 

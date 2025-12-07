@@ -67,6 +67,9 @@ const PixiStage = ({
   const projectilesPropRef = useRef([]);
   const pixiTextureCacheRef = useRef(null); // central TextureCache
   const hbEnabledRef = useRef(healthBarEnabled !== false);
+  const overlayLayerRef = useRef(null); // topmost overlay (underwater tint)
+  const underwaterRef = useRef({ g: null, time: 0 });
+  const waterFramesRef = useRef(null); // cached procedural water textures
 
   // keep latest player state and camera scroll for ticker without re-subscribing
   useEffect(() => {
@@ -211,6 +214,7 @@ const PixiStage = ({
       const weatherLayer = new Container();
       const fogLayer = new Container();
       const projLayer = new Container();
+      const overlayLayer = new Container();
 
       bgRef.current = bg;
       bgAnimRef.current = bgAnim;
@@ -231,10 +235,13 @@ const PixiStage = ({
       // Finally, tiles ("blocks") drawn last so they appear in front of fog
       app.stage.addChild(bg);
       app.stage.addChild(bgAnim); // animated tiles above baked layer
+      // Topmost overlay for effects like underwater tint
+      app.stage.addChild(overlayLayer);
 
       weatherLayerRef.current = weatherLayer;
       fogLayerRef.current = fogLayer;
       projectilesLayerRef.current = projLayer;
+      overlayLayerRef.current = overlayLayer;
 
       // Preload textures to avoid Assets cache warnings for data URLs and ensure textures are ready
       try {
@@ -314,6 +321,24 @@ const PixiStage = ({
         mountRef.current.appendChild(app.canvas);
       }
 
+      // Build underwater overlay graphic (full-screen tint when submerged)
+      try {
+        const g = new Graphics();
+        overlayLayer.addChild(g);
+        underwaterRef.current.g = g;
+        const redrawOverlay = () => {
+          const W = mapWidth * tileSize;
+          const H = mapHeight * tileSize;
+          g.clear();
+          g.beginFill(0x1d4875, 1); // deep blue tint
+          g.drawRect(0, 0, W, H);
+          g.endFill();
+          g.alpha = 0; // initially hidden
+          g.visible = false;
+        };
+        redrawOverlay();
+      } catch {}
+
       // Handle WebGL context loss/restoration gracefully to avoid crashes
       if (app.canvas) {
         app.canvas.addEventListener('webglcontextlost', (e) => {
@@ -391,6 +416,24 @@ const PixiStage = ({
         if (systems.fog) systems.fog.update(dt);
         if (systems.thunder) systems.thunder.update(dt);
 
+        // Underwater overlay animation
+        try {
+          const u = underwaterRef.current;
+          if (u && u.g) {
+            const submerged = !!(playerStateRef.current && playerStateRef.current.headUnderWater);
+            if (submerged) {
+              u.time += dt;
+              const pulse = 0.12 + 0.06 * Math.sin(u.time * 0.0025);
+              u.g.visible = true;
+              u.g.alpha = pulse; // subtle
+            } else if (u.g.visible) {
+              // fade out quickly
+              u.g.alpha *= 0.85;
+              if (u.g.alpha < 0.01) { u.g.alpha = 0; u.g.visible = false; }
+            }
+          }
+        } catch {}
+
         // Projectiles sync/update: create missing sprites, remove stale, update positions
         const layer = projectilesLayerRef.current;
         if (layer) {
@@ -448,6 +491,45 @@ const PixiStage = ({
       objBehindRef.current.removeChildren();
       objFrontRef.current.removeChildren();
 
+      // Helper: resolve registry item by id
+      const getDef = (id) => registryItems.find((r) => r.id === id);
+      const isWaterDef = (def) => !!(def && def.flags && (def.flags.water || def.flags.liquid));
+
+      // Generate procedural water frames (cached per tile size)
+      const getWaterFrames = () => {
+        if (waterFramesRef.current && waterFramesRef.current.size === tileSize) return waterFramesRef.current.frames;
+        const frames = [];
+        const F = 8; // frame count
+        for (let i = 0; i < F; i++) {
+          const canvas = document.createElement('canvas');
+          canvas.width = tileSize; canvas.height = tileSize;
+          const ctx = canvas.getContext('2d');
+          // background gradient
+          const g = ctx.createLinearGradient(0, 0, 0, tileSize);
+          g.addColorStop(0, '#2a5d8f');
+          g.addColorStop(1, '#174369');
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, tileSize, tileSize);
+          // animated ripples via sine stripes
+          ctx.globalAlpha = 0.25;
+          ctx.fillStyle = '#8fc0ff';
+          const t = i / F;
+          const bands = 3;
+          for (let b = 0; b < bands; b++) {
+            const y = Math.floor((tileSize / bands) * b + (tileSize / bands) * 0.5 + Math.sin((t + b * 0.33) * Math.PI * 2) * (tileSize * 0.08));
+            ctx.fillRect(0, y, tileSize, Math.max(1, Math.floor(tileSize * 0.06)));
+          }
+          // soft top highlight
+          ctx.globalAlpha = 0.18;
+          ctx.fillStyle = '#c9ecff';
+          ctx.fillRect(0, 0, tileSize, Math.max(1, Math.floor(tileSize * 0.12)));
+          const tex = Texture.from(canvas);
+          frames.push(tex);
+        }
+        waterFramesRef.current = { size: tileSize, frames };
+        return frames;
+      };
+
       // Background tiles
       for (let i = 0; i < mapWidth * mapHeight; i++) {
         const id = tileMapData[i];
@@ -457,17 +539,26 @@ const PixiStage = ({
 
         let sprite;
         let frames = null;
-        if (Array.isArray(def.textures) && def.textures.length > 1) {
-          frames = def.textures.map((u) => getTexture(u)).filter(Boolean);
-        }
-        if (frames && frames.length > 0) {
+        if (isWaterDef(def)) {
+          // Procedural animated water
+          frames = getWaterFrames();
           sprite = new AnimatedSprite(frames);
-          sprite.animationSpeed = msToSpeed(def.animationSpeed);
+          sprite.animationSpeed = 0.18; // gentle
+          sprite.alpha = 0.95;
           sprite.play();
         } else {
-          const tex = getTexture(def.texture) || null;
-          if (!tex) continue;
-          sprite = new Sprite(tex);
+          if (Array.isArray(def.textures) && def.textures.length > 1) {
+            frames = def.textures.map((u) => getTexture(u)).filter(Boolean);
+          }
+          if (frames && frames.length > 0) {
+            sprite = new AnimatedSprite(frames);
+            sprite.animationSpeed = msToSpeed(def.animationSpeed);
+            sprite.play();
+          } else {
+            const tex = getTexture(def.texture) || null;
+            if (!tex) continue;
+            sprite = new Sprite(tex);
+          }
         }
 
         const x = (i % mapWidth) * tileSize;
@@ -560,6 +651,39 @@ const PixiStage = ({
       // Simple approach: full rebuild
       // Background
       bgRef.current.removeChildren();
+      // Helpers for water rendering
+      const isWaterDef = (def) => !!(def && def.flags && (def.flags.water || def.flags.liquid));
+      const getWaterFrames = () => {
+        if (waterFramesRef.current && waterFramesRef.current.size === tileSize) return waterFramesRef.current.frames;
+        const frames = [];
+        const F = 8;
+        for (let i = 0; i < F; i++) {
+          const canvas = document.createElement('canvas');
+          canvas.width = tileSize; canvas.height = tileSize;
+          const ctx = canvas.getContext('2d');
+          const g = ctx.createLinearGradient(0, 0, 0, tileSize);
+          g.addColorStop(0, '#2a5d8f');
+          g.addColorStop(1, '#174369');
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, tileSize, tileSize);
+          ctx.globalAlpha = 0.25;
+          ctx.fillStyle = '#8fc0ff';
+          const t = i / F;
+          const bands = 3;
+          for (let b = 0; b < bands; b++) {
+            const yb = Math.floor((tileSize / bands) * b + (tileSize / bands) * 0.5 + Math.sin((t + b * 0.33) * Math.PI * 2) * (tileSize * 0.08));
+            ctx.fillRect(0, yb, tileSize, Math.max(1, Math.floor(tileSize * 0.06)));
+          }
+          ctx.globalAlpha = 0.18;
+          ctx.fillStyle = '#c9ecff';
+          ctx.fillRect(0, 0, tileSize, Math.max(1, Math.floor(tileSize * 0.12)));
+          const tex = Texture.from(canvas);
+          frames.push(tex);
+        }
+        waterFramesRef.current = { size: tileSize, frames };
+        return frames;
+      };
+
       for (let i = 0; i < mapWidth * mapHeight; i++) {
         const id = tileMapData[i];
         if (!id) continue;
@@ -568,17 +692,25 @@ const PixiStage = ({
 
         let sprite;
         let frames = null;
-        if (Array.isArray(def.textures) && def.textures.length > 1) {
-          frames = def.textures.map((u) => getTexture(u)).filter(Boolean);
-        }
-        if (frames && frames.length > 0) {
+        if (isWaterDef(def)) {
+          frames = getWaterFrames();
           sprite = new AnimatedSprite(frames);
-          sprite.animationSpeed = msToSpeed(def.animationSpeed);
+          sprite.animationSpeed = 0.18;
+          sprite.alpha = 0.95;
           sprite.play();
         } else {
-          const tex = getTexture(def.texture) || null;
-          if (!tex) continue;
-          sprite = new Sprite(tex);
+          if (Array.isArray(def.textures) && def.textures.length > 1) {
+            frames = def.textures.map((u) => getTexture(u)).filter(Boolean);
+          }
+          if (frames && frames.length > 0) {
+            sprite = new AnimatedSprite(frames);
+            sprite.animationSpeed = msToSpeed(def.animationSpeed);
+            sprite.play();
+          } else {
+            const tex = getTexture(def.texture) || null;
+            if (!tex) continue;
+            sprite = new Sprite(tex);
+          }
         }
         const x = (i % mapWidth) * tileSize;
         const y = Math.floor(i / mapWidth) * tileSize;
@@ -733,6 +865,18 @@ const PixiStage = ({
     // Resize fog overlay to match new world size
     try { weatherSystemsRef.current.fog?.resize(mapWidth * tileSize, mapHeight * tileSize); } catch {}
     try { weatherSystemsRef.current.thunder?.resize(mapWidth * tileSize, mapHeight * tileSize); } catch {}
+    // Resize underwater overlay
+    try {
+      const g = underwaterRef.current?.g;
+      if (g) {
+        g.clear();
+        g.beginFill(0x1d4875, 1);
+        g.drawRect(0, 0, mapWidth * tileSize, mapHeight * tileSize);
+        g.endFill();
+        g.alpha = 0;
+        g.visible = false;
+      }
+    } catch {}
   }, [mapWidth, mapHeight, tileSize]);
 
   return (

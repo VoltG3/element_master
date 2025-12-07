@@ -1,14 +1,15 @@
 {
   "id": "water_block",
-  "name": "block.dirt",
-  "width": "1",
-  "height": "1",
-  "texture": "/assets/images/blocks/water_block.png",
-  "collision": {
-    "top": false,
-    "bottom": false,
-    "left": false,
-    "right": false
-  }
-
+  "name": "block.water",
+  "type": "block",
+  "width": 1,
+  "height": 1,
+  "collision": false,
+  "flags": { "liquid": true, "water": true, "swimmable": true },
+  "liquid": {
+    "buoyancy": 0.5,
+    "drag": { "x": 0.55, "y": 0.65 },
+    "surface": true
+  },
+  "tintBelowSurface": 3829853
 }
