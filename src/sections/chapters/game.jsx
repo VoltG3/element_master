@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import GameRegistry, { findItemById } from '../../GameRegistry'; // Pievienojam findItemById
+import GameRegistry, { findItemById } from '../../core/registry'; // Pievienojam findItemById
 import PixiStage from './PixiStage';
 import { useGameEngine } from '../../utilites/useGameEngine'; // Importējam dzinēju
 import GameHeader from './gameHeader'; // JAUNS

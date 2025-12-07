@@ -1,17 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { useInput } from './useInput';
-import { findItemById } from '../GameRegistry';
+import { findItemById } from '../core/registry';
 import { checkHazardDamage } from '../GameEngine/checkHazardDamage';
 import { spawnProjectile as spawnProjectileExternal } from '../GameEngine/spawnProjectile';
 import { collectItem } from '../GameEngine/collectItem';
 import { updateProjectiles } from '../GameEngine/updateProjectiles';
 import { playSfx } from '../GameEngine/audio';
-import { updateFrame } from '../GameEngine/updateFrame';
+import { updateFrame } from '../core/loop/updateFrame';
 import { getLiquidAtPixel, isLiquidAtPixel as isLiquidAtPixelUtil, sampleLiquidForAABB } from '../GameEngine/liquids/liquidUtils';
 import {
     isSolidAtPixel as isSolidAtPixelExternal,
     checkCollision as checkCollisionExternal
-} from '../GameEngine/collision';
+} from '../core/physics/collision';
 
 const TILE_SIZE = 32;
 const GRAVITY = 0.6;

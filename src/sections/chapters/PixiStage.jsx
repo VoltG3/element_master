@@ -13,6 +13,7 @@ import LavaEmbers from './liquids/LavaEmbers';
 import LavaSteamFX from './liquids/LavaSteamFX';
 import HealthBar from '../../Pixi/ui/HealthBar';
 import LiquidRegionSystem from './LiquidRegionSystem';
+import LAYERS from '../../renderer/stage/layers/LayerOrder';
 
 // Suppress noisy Pixi Assets warnings for inlined data URLs (we load textures directly)
 Assets.setPreferences?.({ skipCacheIdWarning: true });
@@ -239,6 +240,8 @@ const PixiStage = ({
       if (destroyed) { app.destroy(true); return; }
 
       appRef.current = app;
+      // Enable zIndex ordering for stage children
+      try { app.stage.sortableChildren = true; } catch {}
 
       const bg = new Container();
       const bgAnim = new Container();
@@ -252,6 +255,21 @@ const PixiStage = ({
       const projLayer = new Container();
       const overlayLayer = new Container();
 
+      // Assign zIndex following centralized layer order
+      try {
+        bg.zIndex = LAYERS.tiles;
+        bgAnim.zIndex = LAYERS.tilesAnim;
+        objBehind.zIndex = LAYERS.objBehind;
+        objFront.zIndex = LAYERS.objFront;
+        playerLayer.zIndex = LAYERS.player;
+        weatherLayer.zIndex = LAYERS.weather;
+        fogLayer.zIndex = LAYERS.fog;
+        liquidLayer.zIndex = LAYERS.liquids;
+        liquidFxLayer.zIndex = LAYERS.liquidFx;
+        projLayer.zIndex = LAYERS.projectiles;
+        overlayLayer.zIndex = LAYERS.overlay;
+      } catch {}
+
       bgRef.current = bg;
       bgAnimRef.current = bgAnim;
       objBehindRef.current = objBehind;
@@ -259,6 +277,7 @@ const PixiStage = ({
 
       // Parallax layer (behind everything)
       const parallaxLayer = new Container();
+      try { parallaxLayer.zIndex = LAYERS.parallax; } catch {}
       parallaxRef.current = parallaxLayer;
       app.stage.addChild(parallaxLayer);
       // Objects and weather first

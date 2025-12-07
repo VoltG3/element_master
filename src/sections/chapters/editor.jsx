@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import GameRegistry from '../../GameRegistry';
+import GameRegistry from '../../core/registry';
 import AnimatedItem from '../../utilites/AnimatedItem';
 import BackgroundMusicPlayer from '../../utilites/BackgroundMusicPlayer';
 import saveFile from '../../utilites/saveFile';
