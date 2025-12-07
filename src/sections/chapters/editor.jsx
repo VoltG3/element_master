@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import GameRegistry from '../../GameRegistry';
 import AnimatedItem from '../../utilites/AnimatedItem';
 import BackgroundMusicPlayer from '../../utilites/BackgroundMusicPlayer';
+import saveFile from '../../utilites/saveFile';
 
 // ... PaletteSection komponente ... (bez izmaiņām)
 const PaletteSection = ({ title, children, isOpenDefault = false }) => {
@@ -129,7 +130,7 @@ export const Editor = () => {
         }
     };
 
-    const saveMap = () => {
+    const saveMap = async () => {
         const currentDate = new Date().toISOString();
         const createdDate = createdAt || currentDate;
         
@@ -168,11 +169,16 @@ export const Editor = () => {
         // Failā nosaukumā izmantojam kartes nosaukumu, aizvietojot atstarpes
         const fileName = `${mapName.replace(/\s+/g, '_')}.json`;
         const json = JSON.stringify(mapData, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = fileName; document.body.appendChild(link); link.click(); document.body.removeChild(link);
-        
-        // Iestatām izveides datumu, ja tas vēl nebija
-        if (!createdAt) setCreatedAt(currentDate);
+        // Use native save dialog when available (lets user select directory), fallback to download
+        try {
+            const saved = await saveFile(json, fileName, 'application/json');
+            if (saved) {
+                // Iestatām izveides datumu, ja tas vēl nebija
+                if (!createdAt) setCreatedAt(currentDate);
+            }
+        } catch (e) {
+            console.error('Failed to save map:', e);
+        }
     };
 
     const loadMap = (event) => {

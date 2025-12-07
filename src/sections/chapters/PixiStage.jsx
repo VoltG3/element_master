@@ -6,6 +6,7 @@ import { TileChunkLayer } from '../../Pixi/layers/TileChunkLayer';
 import WeatherRain from './weatherRain';
 import WeatherSnow from './weatherSnow';
 import WeatherClouds from './weatherClouds';
+import HealthBar from '../../Pixi/ui/HealthBar';
 
 // Suppress noisy Pixi Assets warnings for inlined data URLs (we load textures directly)
 Assets.setPreferences?.({ skipCacheIdWarning: true });
@@ -36,6 +37,7 @@ const PixiStage = ({
   weatherSnow = 0,
   weatherClouds = 0,
   projectiles = [],
+  healthBarEnabled = true,
 }) => {
   const mountRef = useRef(null);
   const appRef = useRef(null);
@@ -51,6 +53,7 @@ const PixiStage = ({
   const objFrontRef = useRef(null);  // objects above player
   const playerRef = useRef(null); // container holding default/target sprites
   const playerSpriteRefs = useRef({ def: null, hit: null });
+  const playerHealthBarRef = useRef(null);
   const playerStateRef = useRef(null);
   const weatherLayerRef = useRef(null);
   const fogLayerRef = useRef(null); // reused as clouds overlay layer
@@ -59,6 +62,7 @@ const PixiStage = ({
   const projectileSpritesRef = useRef(new Map()); // id -> sprite
   const projectilesPropRef = useRef([]);
   const pixiTextureCacheRef = useRef(null); // central TextureCache
+  const hbEnabledRef = useRef(healthBarEnabled !== false);
 
   // keep latest player state and camera scroll for ticker without re-subscribing
   useEffect(() => {
@@ -67,6 +71,9 @@ const PixiStage = ({
   useEffect(() => {
     projectilesPropRef.current = Array.isArray(projectiles) ? projectiles : [];
   }, [projectiles]);
+  useEffect(() => {
+    hbEnabledRef.current = healthBarEnabled !== false;
+  }, [healthBarEnabled]);
   useEffect(() => {
     cameraScrollRef.current = Number(cameraScrollX) || 0;
   }, [cameraScrollX]);
@@ -281,6 +288,13 @@ const PixiStage = ({
       playerContainer.addChild(defSprite);
       if (hitSprite) playerContainer.addChild(hitSprite);
 
+      // Health bar above player (reusable component)
+      try {
+        const hb = new HealthBar({ width: (playerState?.width) || tileSize, height: 4, offsetX: 0, offsetY: -5 });
+        playerContainer.addChild(hb); // added last to render on top
+        playerHealthBarRef.current = hb;
+      } catch {}
+
       // Initial visibility
       defSprite.visible = true;
       if (hitSprite) hitSprite.visible = false;
@@ -323,6 +337,21 @@ const PixiStage = ({
           // Resize child sprites to match player state
           if (def) { if (s.width) def.width = s.width; if (s.height) def.height = s.height; }
           if (hit) { if (s.width) hit.width = s.width; if (s.height) hit.height = s.height; }
+
+          // Update health bar size and value
+          const hb = playerHealthBarRef.current;
+          if (hb) {
+            const enabled = hbEnabledRef.current !== false;
+            if (!enabled) {
+              hb.visible = false;
+            } else {
+              hb.visible = true;
+              const effectiveWidth = s.width || (def?.width) || tileSize;
+              hb.resize(effectiveWidth, 4);
+              hb.y = -Math.max(4, Math.floor((s.height || def?.height || tileSize) * 0.12)); // small offset above sprite
+              hb.update(s.health, (Number(s.maxHealth) || 100));
+            }
+          }
 
           // Choose which is visible based on hit timer
           const isHit = Number(s.hitTimerMs) > 0 && !!hit;

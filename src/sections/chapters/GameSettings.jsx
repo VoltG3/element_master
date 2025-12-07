@@ -51,6 +51,16 @@ export default function GameSettings() {
     } catch {}
     return 0;
   });
+  // UI: Health bar visibility
+  const [healthBarEnabled, setHealthBarEnabled] = useState(() => {
+    try {
+      const ls = localStorage.getItem('game_ui_healthbar');
+      if (ls !== null) return ls !== '0';
+      const g = window.__GAME_RUNTIME_SETTINGS__;
+      if (g && typeof g.healthBarEnabled === 'boolean') return g.healthBarEnabled;
+    } catch {}
+    return true;
+  });
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [pos, setPos] = useState(() => {
@@ -113,6 +123,7 @@ export default function GameSettings() {
         if (typeof g.weatherSnow === 'number') setSnow(Math.max(0, Math.min(100, g.weatherSnow)));
         if (typeof g.weatherClouds === 'number') setClouds(Math.max(0, Math.min(100, g.weatherClouds)));
         else if (typeof g.weatherFog === 'number') setClouds(Math.max(0, Math.min(100, g.weatherFog)));
+        if (typeof g.healthBarEnabled === 'boolean') setHealthBarEnabled(!!g.healthBarEnabled);
       } catch {}
       // Auto-close the in-game terminal when settings opens
       try { window.dispatchEvent(new CustomEvent('game-close-terminal')); } catch {}
@@ -322,6 +333,19 @@ export default function GameSettings() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <label style={{ fontSize: 12, width: 120 }}>Invert Jump (W)</label>
           <input type="checkbox" />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+          <label style={{ fontSize: 12, width: 120 }}>Show Health Bar</label>
+          <input
+            type="checkbox"
+            checked={!!healthBarEnabled}
+            onChange={(e) => {
+              const v = !!e.target.checked;
+              setHealthBarEnabled(v);
+              try { localStorage.setItem('game_ui_healthbar', v ? '1' : '0'); } catch {}
+              emitUpdate({ healthBarEnabled: v });
+            }}
+          />
         </div>
       </section>
     </>

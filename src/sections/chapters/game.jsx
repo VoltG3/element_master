@@ -169,6 +169,7 @@ export default function Game() {
                 weatherRain: (runtimeSettings.weatherRain ?? 0),
                 weatherSnow: (runtimeSettings.weatherSnow ?? 0),
                 weatherClouds: clouds,
+                healthBarEnabled: (runtimeSettings.healthBarEnabled ?? true),
                 // legacy mirror for compatibility (e.g., older UI)
                 weatherFog: clouds,
             };
@@ -304,6 +305,7 @@ export default function Game() {
                             weatherRain={runtimeSettings.weatherRain ?? 0}
                             weatherSnow={runtimeSettings.weatherSnow ?? 0}
                             weatherClouds={runtimeSettings.weatherClouds ?? runtimeSettings.weatherFog ?? 0}
+                            healthBarEnabled={runtimeSettings.healthBarEnabled ?? true}
                         />
 
                     </div>

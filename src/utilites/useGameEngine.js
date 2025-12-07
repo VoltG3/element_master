@@ -42,6 +42,7 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
         direction: 1, // 1 pa labi, -1 pa kreisi
         animation: 'idle', // idle, run, jump
         health: 90, // Sākotnējā veselība (testam, lai var paņemt sirdi)
+        maxHealth: MAX_HEALTH,
         ammo: 0, // Fireball munīcija
         projectiles: [] // Aktīvie šāvieni renderam
     });
@@ -152,6 +153,7 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
                     // Iegūstam datus no registry
                     const playerId = objLayer.data[startIndex];
                     const registryPlayer = findItemById(playerId) || findItemById("player"); // Fallback uz generic player
+                    const maxHealth = Math.max(1, Number(registryPlayer?.maxHealth) || MAX_HEALTH);
 
                     // Pilnībā pārrakstām gameState ar noklusētajām vērtībām + jauno pozīciju
                     gameState.current = {
@@ -164,7 +166,8 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
                         isGrounded: false,
                         direction: 1,
                         animation: 'idle',
-                        health: 90, // Resetojam uz 90 (nevis MAX), lai var testēt itemus
+                        health: Math.min(90, maxHealth), // Resetojam uz 90 (nevis MAX), lai var testēt itemus
+                        maxHealth,
                         ammo: 0
                     };
 
