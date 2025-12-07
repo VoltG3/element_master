@@ -7,6 +7,7 @@ import WeatherRain from './weatherRain';
 import WeatherSnow from './weatherSnow';
 import WeatherClouds from './weatherClouds';
 import WeatherFog from './weatherFog';
+import WeatherThunder from './weatherThunder';
 import HealthBar from '../../Pixi/ui/HealthBar';
 
 // Suppress noisy Pixi Assets warnings for inlined data URLs (we load textures directly)
@@ -40,6 +41,7 @@ const PixiStage = ({
   projectiles = [],
   healthBarEnabled = true,
   weatherFog = 0,
+  weatherThunder = 0,
 }) => {
   const mountRef = useRef(null);
   const appRef = useRef(null);
@@ -59,7 +61,7 @@ const PixiStage = ({
   const playerStateRef = useRef(null);
   const weatherLayerRef = useRef(null);
   const fogLayerRef = useRef(null); // reused as clouds overlay layer
-  const weatherSystemsRef = useRef({ rain: null, snow: null, clouds: null });
+  const weatherSystemsRef = useRef({ rain: null, snow: null, clouds: null, thunder: null });
   const projectilesLayerRef = useRef(null);
   const projectileSpritesRef = useRef(new Map()); // id -> sprite
   const projectilesPropRef = useRef([]);
@@ -387,6 +389,7 @@ const PixiStage = ({
         if (systems.snow) systems.snow.update(dt);
         if (systems.clouds) systems.clouds.update(dt);
         if (systems.fog) systems.fog.update(dt);
+        if (systems.thunder) systems.thunder.update(dt);
 
         // Projectiles sync/update: create missing sprites, remove stale, update positions
         const layer = projectilesLayerRef.current;
@@ -636,16 +639,19 @@ const PixiStage = ({
     const getRainIntensity = () => Math.max(0, Math.min(100, Number(weatherRain) || 0));
     const getSnowIntensity = () => Math.max(0, Math.min(100, Number(weatherSnow) || 0));
     const getCloudsIntensity = () => Math.max(0, Math.min(100, Number(weatherClouds) || 0));
+    const getThunderIntensity = () => Math.max(0, Math.min(100, Number(weatherThunder) || 0));
 
     // Always reset systems to apply possible dimension changes cleanly
     try { weatherSystemsRef.current.rain?.destroy(); } catch {}
     try { weatherSystemsRef.current.snow?.destroy(); } catch {}
     try { weatherSystemsRef.current.clouds?.destroy(); } catch {}
     try { weatherSystemsRef.current.fog?.destroy(); } catch {}
+    try { weatherSystemsRef.current.thunder?.destroy(); } catch {}
     weatherSystemsRef.current.rain = null;
     weatherSystemsRef.current.snow = null;
     weatherSystemsRef.current.clouds = null;
     weatherSystemsRef.current.fog = null;
+    weatherSystemsRef.current.thunder = null;
 
     // Rain
     if (getRainIntensity() > 0) {
@@ -693,7 +699,20 @@ const PixiStage = ({
       weatherSystemsRef.current.fog?.setIntensity(0);
     }
 
-  }, [weatherRain, weatherSnow, weatherClouds, weatherFog, mapWidth, mapHeight, tileSize, tileMapData]);
+    // Thunder/Lightning (in weather layer, below fog)
+    if (getThunderIntensity() > 0) {
+      if (!weatherSystemsRef.current.thunder) {
+        weatherSystemsRef.current.thunder = new WeatherThunder(weatherLayer, api, getThunderIntensity);
+      }
+      weatherSystemsRef.current.thunder.setIntensity(getThunderIntensity());
+      try { weatherSystemsRef.current.thunder.resize(mapWidth * tileSize, mapHeight * tileSize); } catch {}
+    } else {
+      // We keep instance if present but set intensity to 0 or destroy? To free resources, destroy.
+      try { weatherSystemsRef.current.thunder?.destroy(); } catch {}
+      weatherSystemsRef.current.thunder = null;
+    }
+
+  }, [weatherRain, weatherSnow, weatherClouds, weatherFog, weatherThunder, mapWidth, mapHeight, tileSize, tileMapData]);
 
   // Rebuild parallax when props change
   useEffect(() => {
@@ -713,6 +732,7 @@ const PixiStage = ({
     }
     // Resize fog overlay to match new world size
     try { weatherSystemsRef.current.fog?.resize(mapWidth * tileSize, mapHeight * tileSize); } catch {}
+    try { weatherSystemsRef.current.thunder?.resize(mapWidth * tileSize, mapHeight * tileSize); } catch {}
   }, [mapWidth, mapHeight, tileSize]);
 
   return (

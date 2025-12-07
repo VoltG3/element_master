@@ -164,6 +164,7 @@ export default function Game() {
         try {
             const clouds = (runtimeSettings.weatherClouds ?? 0);
             const fog = (runtimeSettings.weatherFog ?? 0);
+            const thunder = (runtimeSettings.weatherThunder ?? 0);
             window.__GAME_RUNTIME_SETTINGS__ = {
                 ...(window.__GAME_RUNTIME_SETTINGS__ || {}),
                 backgroundParallaxFactor: (runtimeSettings.backgroundParallaxFactor ?? activeMapData?.meta?.backgroundParallaxFactor ?? 0.3),
@@ -171,6 +172,7 @@ export default function Game() {
                 weatherSnow: (runtimeSettings.weatherSnow ?? 0),
                 weatherClouds: clouds,
                 weatherFog: fog,
+                weatherThunder: thunder,
                 healthBarEnabled: (runtimeSettings.healthBarEnabled ?? true),
                 // legacy mirror for compatibility (e.g., older UI)
                 weatherFogLegacy: fog,
@@ -308,6 +310,7 @@ export default function Game() {
                             weatherSnow={runtimeSettings.weatherSnow ?? 0}
                             weatherClouds={runtimeSettings.weatherClouds ?? 0}
                             weatherFog={runtimeSettings.weatherFog ?? 0}
+                            weatherThunder={runtimeSettings.weatherThunder ?? 0}
                             healthBarEnabled={runtimeSettings.healthBarEnabled ?? true}
                         />
 
