@@ -145,13 +145,21 @@ export default class LiquidRegionSystem {
     const worldH = mapHeight * tileSize;
 
     // Draw mask as union of tile rects (grid-aligned)
+    // To avoid hairline gaps between rows/columns due to AA/subpixel sampling,
+    // slightly expand each rect by a small bleed so neighbors overlap.
     mask.clear();
     mask.beginFill(0xffffff, 1);
+    const bleed = 0.5; // px
     for (let k = 0; k < tileIndices.length; k++) {
       const idx = tileIndices[k];
       const gx = (idx % mapWidth);
       const gy = Math.floor(idx / mapWidth);
-      mask.drawRect(gx * tileSize, gy * tileSize, tileSize, tileSize);
+      mask.drawRect(
+        gx * tileSize - bleed,
+        gy * tileSize - bleed,
+        tileSize + bleed * 2,
+        tileSize + bleed * 2
+      );
     }
     mask.endFill();
 
@@ -160,6 +168,8 @@ export default class LiquidRegionSystem {
     const tiling = new TilingSprite(tex, worldW, worldH);
     tiling.tileScale.set(1, 1);
     tiling.alpha = type === 'lava' ? 0.98 : 0.92;
+    // Ensure integer placement to reduce sampling seams
+    tiling.x = 0; tiling.y = 0;
 
     // Constrain fill to region mask
     node.addChild(tiling);

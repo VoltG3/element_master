@@ -411,30 +411,48 @@ export const Editor = () => {
     };
 
     // Paletes items ar animāciju
-    const renderPaletteItem = (item, color, layer) => (
-        <div
+    const renderPaletteItem = (item, color, layer) => {
+        const hasImage = !!(item.texture || (Array.isArray(item.textures) && item.textures.length > 0));
+        const isLiquid = !!(item.flags && item.flags.liquid);
+        const isWater = !!(item.flags && item.flags.water);
+        const isLava = !!(item.flags && item.flags.lava);
+        const swatchStyle = isWater
+            ? { background: 'linear-gradient(180deg,#2a5d8f,#174369)' }
+            : (isLava ? { background: 'linear-gradient(180deg,#6b1a07,#c43f0f)' } : { background: '#eee' });
+
+        return (
+          <div
             key={item.id}
             onClick={() => handlePaletteSelect(item, layer)}
             title={item.name}
             style={{
-                border: selectedTile?.id === item.id ? `2px solid ${color}` : '1px solid #ccc',
-                cursor: 'pointer', padding: '2px', width: '36px', height: '36px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff'
+              border: selectedTile?.id === item.id ? `2px solid ${color}` : '1px solid #ccc',
+              cursor: 'pointer', padding: '2px', width: '36px', height: '36px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff',
+              position: 'relative'
             }}
-        >
-             <AnimatedItem 
-                textures={item.textures} 
-                texture={item.texture} 
-                speed={item.animationSpeed} 
-                style={{maxWidth:'100%', maxHeight:'100%', objectFit: 'contain'}} 
+          >
+            {hasImage ? (
+              <AnimatedItem
+                textures={item.textures}
+                texture={item.texture}
+                speed={item.animationSpeed}
+                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                 alt={item.name}
-             />
-             {/* Fallback ja nav bildes */}
-             {(!item.texture && (!item.textures || item.textures.length === 0)) && 
-                <span style={{fontSize:'10px', overflow:'hidden'}}>{item.name}</span>
-             }
-        </div>
-    );
+              />
+            ) : (
+              <div style={{
+                width: '100%', height: '100%', borderRadius: 2,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
+                fontSize: 10, textAlign: 'center', lineHeight: 1.1,
+                ...swatchStyle
+              }}>
+                {isLiquid ? (isWater ? 'WATER' : (isLava ? 'LAVA' : 'LIQ')) : (item.name || '—')}
+              </div>
+            )}
+          </div>
+        );
+    };
 
     const BlockEraser = () => ( <div onClick={() => { setSelectedTile(null); setActiveLayer('tile'); setActiveTool('brush'); }} title="Erase Blocks (Background)" style={{ border: (selectedTile === null && activeLayer === 'tile') ? `2px solid blue` : '1px solid #ccc', cursor: 'pointer', padding: '2px', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0f8ff', fontSize: '16px', color: 'blue' }}>⌫B</div> );
     const ObjectEraser = () => ( <div onClick={() => { setSelectedTile(null); setActiveLayer('object'); setActiveTool('brush'); }} title="Erase Objects (Entities/Items)" style={{ border: (selectedTile === null && activeLayer === 'object') ? `2px solid red` : '1px solid #ccc', cursor: 'pointer', padding: '2px', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff0f0', fontSize: '16px', color: 'red' }}>⌫O</div> );
@@ -526,7 +544,7 @@ export const Editor = () => {
                      <div className="palette" style={{ flex: 1, overflowY: 'auto' }}>
                         <PaletteSection title="Erasers" isOpenDefault={true}> <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}> <BlockEraser /> <ObjectEraser /> </div> </PaletteSection>
                         <PaletteSection title="Blocks (Background)" isOpenDefault={true}> <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}> {blocks.map(b => renderPaletteItem(b, 'blue', 'tile'))} </div> </PaletteSection>
-                        <PaletteSection title="Liquids (Blocks)"> <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}> {liquids.map(li => renderPaletteItem(li, 'blue', 'tile'))} </div> </PaletteSection>
+                        <PaletteSection title="Liquids (Blocks)" isOpenDefault={true}> <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}> {liquids.map(li => renderPaletteItem(li, 'blue', 'tile'))} </div> </PaletteSection>
                         <PaletteSection title="Entities (Objects)"> <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}> {entities.map(e => renderPaletteItem(e, 'red', 'object'))} </div> </PaletteSection>
                         <PaletteSection title="Items (Objects)"> <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}> {items.map(i => renderPaletteItem(i, 'green', 'object'))} </div> </PaletteSection>
                          {/* JAUNS: Hazards sadaļa */}
