@@ -496,11 +496,13 @@ const PixiStage = ({
             }
           }
 
-          // Oxygen bar when in water
+          // Oxygen bar when in water OR when oxygen hasn't refilled to max yet
           const oxyBar = oxygenBarRef.current;
           if (oxyBar) {
             const enabled = oxyEnabledRef.current !== false;
-            const show = enabled && (s2.liquidType === 'water' || s2.inWater);
+            const maxOxy = Math.max(1, Number(s2.maxOxygen) || 100);
+            const curOxy = Math.max(0, Number(s2.oxygen));
+            const show = enabled && ((s2.liquidType === 'water' || s2.inWater) || (curOxy < maxOxy));
             oxyBar.visible = !!show;
             if (show) {
               oxyBar.x = baseX;
@@ -508,16 +510,17 @@ const PixiStage = ({
               const yOffset = (overlayHBRef.current && overlayHBRef.current.visible) ? 6 : 0;
               oxyBar.y = baseY + yOffset;
               oxyBar.resize(effW, 4);
-              const maxOxy = Number(s2.maxOxygen) || 100;
-              oxyBar.update(Number(s2.oxygen) || maxOxy, maxOxy);
+              oxyBar.update((Number.isFinite(curOxy) ? curOxy : maxOxy), maxOxy);
             }
           }
 
-          // Lava bar when in lava
+          // Lava bar when in lava OR when lavaResist hasn't refilled to max yet
           const lvBar = lavaBarRef.current;
           if (lvBar) {
             const enabled = lavaEnabledRef.current !== false;
-            const show = enabled && s2.liquidType === 'lava';
+            const maxLv = Math.max(1, Number(s2.maxLavaResist) || 100);
+            const curLv = Math.max(0, Number(s2.lavaResist));
+            const show = enabled && (s2.liquidType === 'lava' || (curLv < maxLv));
             lvBar.visible = !!show;
             if (show) {
               lvBar.x = baseX;
@@ -525,8 +528,7 @@ const PixiStage = ({
               const yOffset = (overlayHBRef.current && overlayHBRef.current.visible) ? 6 : 0;
               lvBar.y = baseY + yOffset;
               lvBar.resize(effW, 4);
-              const maxLv = Number(s2.maxLavaResist) || 100;
-              lvBar.update(Number(s2.lavaResist) || maxLv, maxLv);
+              lvBar.update((Number.isFinite(curLv) ? curLv : maxLv), maxLv);
             }
           }
         } catch {}

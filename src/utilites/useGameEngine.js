@@ -69,7 +69,9 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
     const soundEnabledRef = useRef(false);                 // Globālais skaņas slēdzis
     const audioCtxRef = useRef(null);                      // WebAudio konteksts (fallbackam)
     const audioCtxUnlockedRef = useRef(false);             // Vai AudioContext ir atbloķēts ar user gesture
-    const liquidDamageAccumulatorRef = useRef(0);          // Uzkrātais laiks šķidrumu DPS tiksēšanai
+    const liquidDamageAccumulatorRef = useRef(0);          // Uzkrātais laiks šķidrumu DPS tiksēšanai (piem., lava)
+    const oxygenDepleteAccRef = useRef(0);                 // O2 izsīkuma DPS akumulators
+    const lavaDepleteAccRef = useRef(0);                   // Lava resist izsīkuma DPS akumulators
 
     // Sync global sound toggle from localStorage and events
     useEffect(() => {
@@ -302,7 +304,7 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
             mapData,
             objectData,
             input,
-            refs: { gameState, isInitialized, lastTimeRef, projectilesRef, shootCooldownRef, liquidDamageAccumulatorRef },
+            refs: { gameState, isInitialized, lastTimeRef, projectilesRef, shootCooldownRef, liquidDamageAccumulatorRef, oxygenDepleteAccRef, lavaDepleteAccRef },
             constants: { TILE_SIZE, GRAVITY, TERMINAL_VELOCITY, MOVE_SPEED, JUMP_FORCE },
             helpers: {
                 checkCollision,

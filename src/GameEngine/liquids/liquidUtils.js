@@ -30,7 +30,18 @@ export function getLiquidAtPixel(wx, wy, mapWidthTiles, mapHeightTiles, TILE_SIZ
     dragY: Number(def?.liquid?.drag?.y),
     surface: !!def?.liquid?.surface,
     swimmable: def?.flags?.swimmable === true || def?.liquid?.swimmable === true,
-    dps: Number(def?.liquid?.damagePerSecond)
+    dps: Number(def?.liquid?.damagePerSecond),
+    // Optional resource models
+    oxygen: {
+      drainPerSecond: Number(def?.liquid?.oxygen?.drainPerSecond),
+      regenPerSecond: Number(def?.liquid?.oxygen?.regenPerSecond),
+      damagePerSecondWhenDepleted: Number(def?.liquid?.oxygen?.damagePerSecondWhenDepleted)
+    },
+    resistance: {
+      drainPerSecond: Number(def?.liquid?.resistance?.drainPerSecond),
+      regenPerSecond: Number(def?.liquid?.resistance?.regenPerSecond),
+      damagePerSecondWhenDepleted: Number(def?.liquid?.resistance?.damagePerSecondWhenDepleted)
+    }
   };
   return { def, type, params };
 }
@@ -68,7 +79,17 @@ export function sampleLiquidForAABB({ x, y, width, height, TILE_SIZE, mapWidth, 
     dragY: Number.isFinite(candidate.params.dragY) ? candidate.params.dragY : 0.65,
     surface: !!candidate.params.surface,
     swimmable: !!candidate.params.swimmable,
-    dps: Number.isFinite(candidate.params.dps) ? Math.max(0, candidate.params.dps) : 0
+    dps: Number.isFinite(candidate.params.dps) ? Math.max(0, candidate.params.dps) : 0,
+    oxygen: {
+      drainPerSecond: Number.isFinite(candidate.params?.oxygen?.drainPerSecond) ? Math.max(0, candidate.params.oxygen.drainPerSecond) : 20,
+      regenPerSecond: Number.isFinite(candidate.params?.oxygen?.regenPerSecond) ? Math.max(0, candidate.params.oxygen.regenPerSecond) : 35,
+      damagePerSecondWhenDepleted: Number.isFinite(candidate.params?.oxygen?.damagePerSecondWhenDepleted) ? Math.max(0, candidate.params.oxygen.damagePerSecondWhenDepleted) : 10
+    },
+    resistance: {
+      drainPerSecond: Number.isFinite(candidate.params?.resistance?.drainPerSecond) ? Math.max(0, candidate.params.resistance.drainPerSecond) : 25,
+      regenPerSecond: Number.isFinite(candidate.params?.resistance?.regenPerSecond) ? Math.max(0, candidate.params.resistance.regenPerSecond) : 40,
+      damagePerSecondWhenDepleted: Number.isFinite(candidate.params?.resistance?.damagePerSecondWhenDepleted) ? Math.max(0, candidate.params.resistance.damagePerSecondWhenDepleted) : 15
+    }
   };
   const inLiquid = !!(feet || chest);
   const headUnder = !!head;

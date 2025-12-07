@@ -29,7 +29,7 @@ export function updateFrame(ctx, timestamp) {
     actions
   } = ctx;
 
-  const { gameState, isInitialized, lastTimeRef, projectilesRef, shootCooldownRef, liquidDamageAccumulatorRef } = refs;
+  const { gameState, isInitialized, lastTimeRef, projectilesRef, shootCooldownRef, liquidDamageAccumulatorRef, oxygenDepleteAccRef, lavaDepleteAccRef } = refs;
   const { TILE_SIZE, GRAVITY, TERMINAL_VELOCITY, MOVE_SPEED, JUMP_FORCE } = constants;
   const { checkCollision, isWaterAt, getLiquidSample } = helpers;
   const { collectItem, checkHazardDamage, spawnProjectile, updateProjectiles, setPlayer, onGameOver } = actions;
@@ -144,7 +144,7 @@ export function updateFrame(ctx, timestamp) {
   }
 
   // 2.7) Resource bars logic (oxygen & lava resistance indicators)
-  // These are cosmetic/state indicators requested for UI; gameplay effects are not altered here.
+  // Now with gameplay effects on depletion: when oxygen/lavaResist reach 0 and player stays in the liquid, health takes DPS from JSON.
   try {
     const dt = Math.max(0, deltaMs || 0);
     // Initialize defaults if missing
@@ -154,25 +154,60 @@ export function updateFrame(ctx, timestamp) {
     let lavaRes = Number(gameState.current.lavaResist);
     if (!Number.isFinite(oxy)) oxy = maxOxy;
     if (!Number.isFinite(lavaRes)) lavaRes = maxLava;
-    // Rates per second
-    const OXY_DRAIN_PER_SEC = 20;   // drains to 0 in ~5s fully submerged
-    const OXY_REFILL_PER_SEC = 35;  // refills faster when out of water
-    const LAVA_DRAIN_PER_SEC = 25;  // drains to 0 in ~4s while in lava
-    const LAVA_REFILL_PER_SEC = 40; // refills faster when not in lava
+    // Resolve per-liquid parameters (with safe defaults)
+    const oxyParams = liquidParams?.oxygen || { drainPerSecond: 20, regenPerSecond: 35, damagePerSecondWhenDepleted: 10 };
+    const lavaParams = liquidParams?.resistance || { drainPerSecond: 25, regenPerSecond: 40, damagePerSecondWhenDepleted: 15 };
+
+    // Oxygen: drains only while head is under water; otherwise regenerates to 100 even after leaving water
     if (headUnderWater && (liquidType === 'water' || inWater)) {
-      oxy -= (OXY_DRAIN_PER_SEC * dt) / 1000;
+      oxy -= (Math.max(0, Number(oxyParams.drainPerSecond) || 0) * dt) / 1000;
     } else {
-      oxy += (OXY_REFILL_PER_SEC * dt) / 1000;
+      oxy += (Math.max(0, Number(oxyParams.regenPerSecond) || 0) * dt) / 1000;
     }
-    if (liquidType === 'lava') {
-      lavaRes -= (LAVA_DRAIN_PER_SEC * dt) / 1000;
-    } else {
-      lavaRes += (LAVA_REFILL_PER_SEC * dt) / 1000;
-    }
-    gameState.current.oxygen = Math.max(0, Math.min(maxOxy, oxy));
+    // Clamp and write back
+    oxy = Math.max(0, Math.min(maxOxy, oxy));
+    gameState.current.oxygen = oxy;
     gameState.current.maxOxygen = maxOxy;
-    gameState.current.lavaResist = Math.max(0, Math.min(maxLava, lavaRes));
+
+    // Lava resistance: drains while in lava; regenerates outside
+    if (liquidType === 'lava') {
+      lavaRes -= (Math.max(0, Number(lavaParams.drainPerSecond) || 0) * dt) / 1000;
+    } else {
+      lavaRes += (Math.max(0, Number(lavaParams.regenPerSecond) || 0) * dt) / 1000;
+    }
+    lavaRes = Math.max(0, Math.min(maxLava, lavaRes));
+    gameState.current.lavaResist = lavaRes;
     gameState.current.maxLavaResist = maxLava;
+
+    // Apply depletion health damage when at zero and still in corresponding liquid
+    const tickDepleteDps = (accRef, dpsValue) => {
+      const v = Math.max(0, Number(dpsValue) || 0);
+      if (v <= 0) { accRef.current = 0; return; }
+      accRef.current += dt;
+      const T = 1000;
+      while (accRef.current >= T) {
+        accRef.current -= T;
+        gameState.current.health = Math.max(0, (Number(gameState.current.health) || 0) - v);
+        // Hit flash
+        const HIT_FLASH_MS = 500;
+        const prev = Number(gameState.current.hitTimerMs) || 0;
+        gameState.current.hitTimerMs = Math.max(prev, HIT_FLASH_MS);
+      }
+    };
+
+    // Oxygen depleted and still underwater → damage
+    if ((headUnderWater && (liquidType === 'water' || inWater)) && oxy <= 0) {
+      tickDepleteDps(oxygenDepleteAccRef, oxyParams.damagePerSecondWhenDepleted);
+    } else if (oxygenDepleteAccRef) {
+      oxygenDepleteAccRef.current = 0;
+    }
+
+    // Lava resist depleted and still in lava → damage
+    if (liquidType === 'lava' && lavaRes <= 0) {
+      tickDepleteDps(lavaDepleteAccRef, lavaParams.damagePerSecondWhenDepleted);
+    } else if (lavaDepleteAccRef) {
+      lavaDepleteAccRef.current = 0;
+    }
   } catch {}
 
   // 3) Item collection
