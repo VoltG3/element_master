@@ -19,6 +19,8 @@ const TERMINAL_VELOCITY = 12;
 const MOVE_SPEED = 4;
 const JUMP_FORCE = 10;
 const MAX_HEALTH = 100; // Maksimālā veselība
+const MAX_OXYGEN = 100; // Maksimālais skābeklis zem ūdens
+const MAX_LAVA_RESIST = 100; // Maks. izturība pret lavu
 
 // Helper: accept boolean or string values like "true"/"false"
 const parseBool = (v, def = false) => {
@@ -45,8 +47,13 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
         health: 90, // Sākotnējā veselība (testam, lai var paņemt sirdi)
         maxHealth: MAX_HEALTH,
         ammo: 0, // Fireball munīcija
+        // Jaunie resursi indikācijai
+        oxygen: MAX_OXYGEN,
+        maxOxygen: MAX_OXYGEN,
+        lavaResist: MAX_LAVA_RESIST,
+        maxLavaResist: MAX_LAVA_RESIST,
         projectiles: [] // Aktīvie šāvieni renderam
-    });
+  });
 
     // Ref objekti spēles loģikai
     const gameState = useRef({ ...player });               // Spēlētāja stāvoklis loopam (izvairās no closure problēmām)
@@ -170,7 +177,12 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
                         animation: 'idle',
                         health: Math.min(90, maxHealth), // Resetojam uz 90 (nevis MAX), lai var testēt itemus
                         maxHealth,
-                        ammo: 0
+                        ammo: 0,
+                        // resursi
+                        oxygen: MAX_OXYGEN,
+                        maxOxygen: MAX_OXYGEN,
+                        lavaResist: MAX_LAVA_RESIST,
+                        maxLavaResist: MAX_LAVA_RESIST
                     };
 
                     // Ja starta pozīcija iegrimst blokā, pabīdam uz augšu līdz drošai vietai
@@ -192,7 +204,11 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
                         x: 0,
                         y: 0,
                         vx: 0,
-                        vy: 0
+                        vy: 0,
+                        oxygen: MAX_OXYGEN,
+                        maxOxygen: MAX_OXYGEN,
+                        lavaResist: MAX_LAVA_RESIST,
+                        maxLavaResist: MAX_LAVA_RESIST
                     };
                     setPlayer({ ...gameState.current, projectiles: [] });
                     isInitialized.current = true; // ļaujam loopam darboties arī bez start pozīcijas
@@ -204,7 +220,11 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
                     x: 0,
                     y: 0,
                     vx: 0,
-                    vy: 0
+                    vy: 0,
+                    oxygen: MAX_OXYGEN,
+                    maxOxygen: MAX_OXYGEN,
+                    lavaResist: MAX_LAVA_RESIST,
+                    maxLavaResist: MAX_LAVA_RESIST
                 };
                 setPlayer({ ...gameState.current, projectiles: [] });
                 isInitialized.current = true;

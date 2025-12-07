@@ -174,6 +174,8 @@ export default function Game() {
                 weatherFog: fog,
                 weatherThunder: thunder,
                 healthBarEnabled: (runtimeSettings.healthBarEnabled ?? true),
+                oxygenBarEnabled: (runtimeSettings.oxygenBarEnabled ?? true),
+                lavaBarEnabled: (runtimeSettings.lavaBarEnabled ?? true),
                 // legacy mirror for compatibility (e.g., older UI)
                 weatherFogLegacy: fog,
             };
@@ -312,6 +314,8 @@ export default function Game() {
                             weatherFog={runtimeSettings.weatherFog ?? 0}
                             weatherThunder={runtimeSettings.weatherThunder ?? 0}
                             healthBarEnabled={runtimeSettings.healthBarEnabled ?? true}
+                            oxygenBarEnabled={runtimeSettings.oxygenBarEnabled ?? true}
+                            lavaBarEnabled={runtimeSettings.lavaBarEnabled ?? true}
                         />
 
                     </div>

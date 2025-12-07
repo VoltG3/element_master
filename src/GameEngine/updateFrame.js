@@ -143,6 +143,38 @@ export function updateFrame(ctx, timestamp) {
     } catch {}
   }
 
+  // 2.7) Resource bars logic (oxygen & lava resistance indicators)
+  // These are cosmetic/state indicators requested for UI; gameplay effects are not altered here.
+  try {
+    const dt = Math.max(0, deltaMs || 0);
+    // Initialize defaults if missing
+    const maxOxy = Math.max(1, Number(gameState.current.maxOxygen || 100));
+    const maxLava = Math.max(1, Number(gameState.current.maxLavaResist || 100));
+    let oxy = Number(gameState.current.oxygen);
+    let lavaRes = Number(gameState.current.lavaResist);
+    if (!Number.isFinite(oxy)) oxy = maxOxy;
+    if (!Number.isFinite(lavaRes)) lavaRes = maxLava;
+    // Rates per second
+    const OXY_DRAIN_PER_SEC = 20;   // drains to 0 in ~5s fully submerged
+    const OXY_REFILL_PER_SEC = 35;  // refills faster when out of water
+    const LAVA_DRAIN_PER_SEC = 25;  // drains to 0 in ~4s while in lava
+    const LAVA_REFILL_PER_SEC = 40; // refills faster when not in lava
+    if (headUnderWater && (liquidType === 'water' || inWater)) {
+      oxy -= (OXY_DRAIN_PER_SEC * dt) / 1000;
+    } else {
+      oxy += (OXY_REFILL_PER_SEC * dt) / 1000;
+    }
+    if (liquidType === 'lava') {
+      lavaRes -= (LAVA_DRAIN_PER_SEC * dt) / 1000;
+    } else {
+      lavaRes += (LAVA_REFILL_PER_SEC * dt) / 1000;
+    }
+    gameState.current.oxygen = Math.max(0, Math.min(maxOxy, oxy));
+    gameState.current.maxOxygen = maxOxy;
+    gameState.current.lavaResist = Math.max(0, Math.min(maxLava, lavaRes));
+    gameState.current.maxLavaResist = maxLava;
+  } catch {}
+
   // 3) Item collection
   collectItem(x, y, mapWidth, objectData);
 

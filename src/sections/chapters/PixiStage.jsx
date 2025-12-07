@@ -42,7 +42,9 @@ const PixiStage = ({
   healthBarEnabled = true,
   weatherFog = 0,
   weatherThunder = 0,
-}) => {
+  oxygenBarEnabled = true,
+  lavaBarEnabled = true,
+  }) => {
   const mountRef = useRef(null);
   const appRef = useRef(null);
   const parallaxRef = useRef(null);
@@ -67,10 +69,15 @@ const PixiStage = ({
   const projectilesPropRef = useRef([]);
   const pixiTextureCacheRef = useRef(null); // central TextureCache
   const hbEnabledRef = useRef(healthBarEnabled !== false);
+  const oxyEnabledRef = useRef(oxygenBarEnabled !== false);
+  const lavaEnabledRef = useRef(lavaBarEnabled !== false);
   const overlayLayerRef = useRef(null); // topmost overlay (underwater tint)
   const underwaterRef = useRef({ g: null, time: 0 });
   const waterFramesRef = useRef(null); // cached procedural water textures
   const lavaFramesRef = useRef(null);  // cached procedural lava textures
+  const overlayHBRef = useRef(null);   // health bar rendered above water
+  const oxygenBarRef = useRef(null);   // oxygen bar when in water
+  const lavaBarRef = useRef(null);     // lava resistance bar when in lava
 
   // keep latest player state and camera scroll for ticker without re-subscribing
   useEffect(() => {
@@ -82,6 +89,12 @@ const PixiStage = ({
   useEffect(() => {
     hbEnabledRef.current = healthBarEnabled !== false;
   }, [healthBarEnabled]);
+  useEffect(() => {
+    oxyEnabledRef.current = oxygenBarEnabled !== false;
+  }, [oxygenBarEnabled]);
+  useEffect(() => {
+    lavaEnabledRef.current = lavaBarEnabled !== false;
+  }, [lavaBarEnabled]);
   useEffect(() => {
     cameraScrollRef.current = Number(cameraScrollX) || 0;
   }, [cameraScrollX]);
@@ -340,6 +353,28 @@ const PixiStage = ({
         redrawOverlay();
       } catch {}
 
+      // Build overlay bars (health over water, oxygen, lava)
+      try {
+        const makeBar = (colors) => new HealthBar({ width: (playerState?.width) || tileSize, height: 4, offsetX: 0, offsetY: 0, colors });
+        // Health overlay bar (uses default colors from HealthBar)
+        const hbOverlay = new HealthBar({ width: (playerState?.width) || tileSize, height: 4, offsetX: 0, offsetY: 0 });
+        hbOverlay.visible = false;
+        overlayLayer.addChild(hbOverlay);
+        overlayHBRef.current = hbOverlay;
+        // Oxygen bar (cyan/blue scheme)
+        const oxyColors = { ok: 0x2ecdf1, warn: 0x3498db, danger: 0x1f6fb2 };
+        const oxyBar = makeBar(oxyColors);
+        oxyBar.visible = false;
+        overlayLayer.addChild(oxyBar);
+        oxygenBarRef.current = oxyBar;
+        // Lava bar (orange/red scheme)
+        const lavaColors = { ok: 0xffa229, warn: 0xff7b00, danger: 0xff3b1a };
+        const lvBar = makeBar(lavaColors);
+        lvBar.visible = false;
+        overlayLayer.addChild(lvBar);
+        lavaBarRef.current = lvBar;
+      } catch {}
+
       // Handle WebGL context loss/restoration gracefully to avoid crashes
       if (app.canvas) {
         app.canvas.addEventListener('webglcontextlost', (e) => {
@@ -374,10 +409,12 @@ const PixiStage = ({
           const hb = playerHealthBarRef.current;
           if (hb) {
             const enabled = hbEnabledRef.current !== false;
+            const inWater = !!s.inWater;
             if (!enabled) {
               hb.visible = false;
             } else {
-              hb.visible = true;
+              // When in water, we hide the player-attached HB and use overlay version instead
+              hb.visible = !inWater;
               const effectiveWidth = s.width || (def?.width) || tileSize;
               hb.resize(effectiveWidth, 4);
               hb.y = -Math.max(4, Math.floor((s.height || def?.height || tileSize) * 0.12)); // small offset above sprite
@@ -431,6 +468,65 @@ const PixiStage = ({
               // fade out quickly
               u.g.alpha *= 0.85;
               if (u.g.alpha < 0.01) { u.g.alpha = 0; u.g.visible = false; }
+            }
+          }
+        } catch {}
+
+        // Overlay bars update/positioning
+        try {
+          const s2 = playerStateRef.current || {};
+          const effW = (s2.width || tileSize);
+          const effH = (s2.height || tileSize);
+          // Compute anchor top Y above player
+          const baseYOffset = Math.max(4, Math.floor(effH * 0.12));
+          const baseX = (s2.x || 0);
+          const baseY = (s2.y || 0) - baseYOffset;
+
+          // Overlay health when in water
+          const hbO = overlayHBRef.current;
+          if (hbO) {
+            const enabled = hbEnabledRef.current !== false;
+            const show = enabled && !!s2.inWater;
+            hbO.visible = !!show;
+            if (show) {
+              hbO.x = baseX;
+              hbO.y = baseY;
+              hbO.resize(effW, 4);
+              hbO.update(s2.health, (Number(s2.maxHealth) || 100));
+            }
+          }
+
+          // Oxygen bar when in water
+          const oxyBar = oxygenBarRef.current;
+          if (oxyBar) {
+            const enabled = oxyEnabledRef.current !== false;
+            const show = enabled && (s2.liquidType === 'water' || s2.inWater);
+            oxyBar.visible = !!show;
+            if (show) {
+              oxyBar.x = baseX;
+              // place just below overlay health bar when both visible
+              const yOffset = (overlayHBRef.current && overlayHBRef.current.visible) ? 6 : 0;
+              oxyBar.y = baseY + yOffset;
+              oxyBar.resize(effW, 4);
+              const maxOxy = Number(s2.maxOxygen) || 100;
+              oxyBar.update(Number(s2.oxygen) || maxOxy, maxOxy);
+            }
+          }
+
+          // Lava bar when in lava
+          const lvBar = lavaBarRef.current;
+          if (lvBar) {
+            const enabled = lavaEnabledRef.current !== false;
+            const show = enabled && s2.liquidType === 'lava';
+            lvBar.visible = !!show;
+            if (show) {
+              lvBar.x = baseX;
+              // If health overlay is not visible, align to base; else stack
+              const yOffset = (overlayHBRef.current && overlayHBRef.current.visible) ? 6 : 0;
+              lvBar.y = baseY + yOffset;
+              lvBar.resize(effW, 4);
+              const maxLv = Number(s2.maxLavaResist) || 100;
+              lvBar.update(Number(s2.lavaResist) || maxLv, maxLv);
             }
           }
         } catch {}

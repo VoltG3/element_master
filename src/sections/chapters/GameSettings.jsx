@@ -81,6 +81,25 @@ export default function GameSettings() {
     } catch {}
     return true;
   });
+  // UI: Oxygen/Lava bars visibility
+  const [oxygenBarEnabled, setOxygenBarEnabled] = useState(() => {
+    try {
+      const ls = localStorage.getItem('game_ui_oxygenbar');
+      if (ls !== null) return ls !== '0';
+      const g = window.__GAME_RUNTIME_SETTINGS__;
+      if (g && typeof g.oxygenBarEnabled === 'boolean') return g.oxygenBarEnabled;
+    } catch {}
+    return true;
+  });
+  const [lavaBarEnabled, setLavaBarEnabled] = useState(() => {
+    try {
+      const ls = localStorage.getItem('game_ui_lavabar');
+      if (ls !== null) return ls !== '0';
+      const g = window.__GAME_RUNTIME_SETTINGS__;
+      if (g && typeof g.lavaBarEnabled === 'boolean') return g.lavaBarEnabled;
+    } catch {}
+    return true;
+  });
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [pos, setPos] = useState(() => {
@@ -145,6 +164,8 @@ export default function GameSettings() {
         if (typeof g.weatherFog === 'number') setFog(Math.max(0, Math.min(100, g.weatherFog)));
         if (typeof g.weatherThunder === 'number') setThunder(Math.max(0, Math.min(100, g.weatherThunder)));
         if (typeof g.healthBarEnabled === 'boolean') setHealthBarEnabled(!!g.healthBarEnabled);
+        if (typeof g.oxygenBarEnabled === 'boolean') setOxygenBarEnabled(!!g.oxygenBarEnabled);
+        if (typeof g.lavaBarEnabled === 'boolean') setLavaBarEnabled(!!g.lavaBarEnabled);
       } catch {}
       // Auto-close the in-game terminal when settings opens
       try { window.dispatchEvent(new CustomEvent('game-close-terminal')); } catch {}
@@ -365,6 +386,32 @@ export default function GameSettings() {
               setHealthBarEnabled(v);
               try { localStorage.setItem('game_ui_healthbar', v ? '1' : '0'); } catch {}
               emitUpdate({ healthBarEnabled: v });
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+          <label style={{ fontSize: 12, width: 120 }}>Show Oxygen Bar</label>
+          <input
+            type="checkbox"
+            checked={!!oxygenBarEnabled}
+            onChange={(e) => {
+              const v = !!e.target.checked;
+              setOxygenBarEnabled(v);
+              try { localStorage.setItem('game_ui_oxygenbar', v ? '1' : '0'); } catch {}
+              emitUpdate({ oxygenBarEnabled: v });
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+          <label style={{ fontSize: 12, width: 120 }}>Show Lava Bar</label>
+          <input
+            type="checkbox"
+            checked={!!lavaBarEnabled}
+            onChange={(e) => {
+              const v = !!e.target.checked;
+              setLavaBarEnabled(v);
+              try { localStorage.setItem('game_ui_lavabar', v ? '1' : '0'); } catch {}
+              emitUpdate({ lavaBarEnabled: v });
             }}
           />
         </div>
