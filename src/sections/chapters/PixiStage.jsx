@@ -10,6 +10,7 @@ import WeatherFog from './weatherFog';
 import WeatherThunder from './weatherThunder';
 import WaterSplashFX from './liquids/WaterSplashFX';
 import LavaEmbers from './liquids/LavaEmbers';
+import LavaSteamFX from './liquids/LavaSteamFX';
 import HealthBar from '../../Pixi/ui/HealthBar';
 import LiquidRegionSystem from './LiquidRegionSystem';
 
@@ -87,6 +88,7 @@ const PixiStage = ({
   const lavaBarRef = useRef(null);     // lava resistance bar when in lava
   const waterFxRef = useRef(null);     // water splash FX
   const lavaEmbersRef = useRef(null);  // lava ember FX
+  const lavaSteamRef = useRef(null);   // lava steam FX (rain/snow impacts)
   const splashesEnabledRef = useRef(waterSplashesEnabled !== false);
   const embersEnabledRef = useRef(lavaEmbersEnabled !== false);
   const waterStateRef = useRef({ inWater: false, headUnder: false, vy: 0 });
@@ -245,6 +247,7 @@ const PixiStage = ({
       const playerLayer = new Container();
       const weatherLayer = new Container();
       const liquidLayer = new Container();
+      const liquidFxLayer = new Container();
       const fogLayer = new Container();
       const projLayer = new Container();
       const overlayLayer = new Container();
@@ -263,11 +266,15 @@ const PixiStage = ({
       app.stage.addChild(playerLayer);
       app.stage.addChild(projLayer); // projectiles above player
       app.stage.addChild(objFront); // objects above player
-      // Liquids rendered like weather (under fog, above player/objects)
+      // Weather renders below fog
+      app.stage.addChild(weatherLayer);
+      // Fog overlays objects and weather (Variant 1)
+      app.stage.addChild(fogLayer);
+      // Liquids should be visible like blocks even when fog is enabled → render ABOVE fog
       app.stage.addChild(liquidLayer);
-      app.stage.addChild(weatherLayer); // rain/snow above liquids
-      app.stage.addChild(fogLayer); // fog overlay above all objects/weather
-      // Finally, tiles ("blocks") drawn last so they appear in front of fog
+      // Liquid FX (splashes/steam) must appear in front of liquids
+      app.stage.addChild(liquidFxLayer);
+      // Finally, tiles ("blocks") drawn last so they appear in front of fog (and in front of liquids)
       app.stage.addChild(bg);
       app.stage.addChild(bgAnim); // animated tiles above baked layer
       // Topmost overlay for effects like underwater tint
@@ -275,9 +282,19 @@ const PixiStage = ({
 
       weatherLayerRef.current = weatherLayer;
       liquidLayerRef.current = liquidLayer;
+      // Assign overlay layer ref BEFORE attaching any custom properties to it
+      overlayLayerRef.current = overlayLayer;
+      // store FX layer ref
+      const liquidFxLayerRefLocal = liquidFxLayer;
+      // Save on ref object via a symbol-like property to avoid new ref declaration
+      // We'll attach to overlayLayerRef to keep simple access (defensively check ref)
+      try {
+        if (overlayLayerRef.current) {
+          overlayLayerRef.current.__liquidFxLayer = liquidFxLayerRefLocal;
+        }
+      } catch {}
       fogLayerRef.current = fogLayer;
       projectilesLayerRef.current = projLayer;
-      overlayLayerRef.current = overlayLayer;
 
       // Preload textures to avoid Assets cache warnings for data URLs and ensure textures are ready
       try {
@@ -435,7 +452,13 @@ const PixiStage = ({
       } catch (e) { console.warn('LiquidRegionSystem init failed:', e); }
       // FX systems
       try {
-        waterFxRef.current = new WaterSplashFX(liquidLayerRef.current);
+        // Ensure splashes render IN FRONT of water: parent to liquid FX layer if available
+        const fxParent = overlayLayerRef.current?.__liquidFxLayer || liquidLayerRef.current;
+        waterFxRef.current = new WaterSplashFX(fxParent);
+      } catch {}
+      try {
+        const fxParent = overlayLayerRef.current?.__liquidFxLayer || liquidLayerRef.current;
+        lavaSteamRef.current = new LavaSteamFX(fxParent);
       } catch {}
       try {
         lavaEmbersRef.current = new LavaEmbers(liquidLayerRef.current, { mapWidth, mapHeight, tileSize }, () => (embersEnabledRef.current ? 100 : 0));
@@ -511,6 +534,7 @@ const PixiStage = ({
         // FX systems update
         try { lavaEmbersRef.current?.update(dt); } catch {}
         try { waterFxRef.current?.update(dt); } catch {}
+        try { lavaSteamRef.current?.update(dt); } catch {}
 
         // Underwater overlay animation (only for water) and water splash triggers
         try {
@@ -844,6 +868,8 @@ const PixiStage = ({
       waterFxRef.current = null;
       try { lavaEmbersRef.current?.destroy(); } catch {}
       lavaEmbersRef.current = null;
+      try { lavaSteamRef.current?.destroy(); } catch {}
+      lavaSteamRef.current = null;
       // Destroy parallax helper and texture cache (releasing references only)
       try { parallaxHelperRef.current?.destroy(); } catch {}
       parallaxHelperRef.current = null;
@@ -1042,7 +1068,30 @@ const PixiStage = ({
     const fogLayer = fogLayerRef.current;
     if (!app || !weatherLayer || !fogLayer) return;
 
-    const api = { isSolidAt, mapWidth, mapHeight, tileSize };
+    const api = {
+      isSolidAt,
+      mapWidth,
+      mapHeight,
+      tileSize,
+      // Liquids surface queries for weather interactions
+      getLiquidSurfaceY: (type, x) => {
+        try { return liquidSystemRef.current?.getSurfaceY?.(type, x); } catch { return null; }
+      },
+      // FX hooks for water/lava impacts from weather
+      onWaterImpact: ({ x, strength = 0.8 }) => {
+        try {
+          const sy = liquidSystemRef.current?.getSurfaceY?.('water', x);
+          if (Number.isFinite(sy)) waterFxRef.current?.trigger({ x, y: sy, strength: Math.max(0.2, Math.min(2, strength)), upward: false });
+        } catch {}
+      },
+      onLavaImpact: ({ x, y, strength = 0.6 }) => {
+        try {
+          const sy = liquidSystemRef.current?.getSurfaceY?.('lava', x);
+          const yy = Number.isFinite(y) ? y : (Number.isFinite(sy) ? sy : null);
+          if (yy != null) lavaSteamRef.current?.trigger({ x, y: yy, strength });
+        } catch {}
+      }
+    };
     const getRainIntensity = () => Math.max(0, Math.min(100, Number(weatherRain) || 0));
     const getSnowIntensity = () => Math.max(0, Math.min(100, Number(weatherSnow) || 0));
     const getCloudsIntensity = () => Math.max(0, Math.min(100, Number(weatherClouds) || 0));

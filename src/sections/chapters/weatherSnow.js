@@ -34,7 +34,7 @@ export default class WeatherSnow {
     g.x = x;
     g.y = y;
     this.container.addChild(g);
-    this.flakes.push({ g, x, y, vx: drift, vy: speed, alive: true, settled: false, life: 1.0 });
+    this.flakes.push({ g, x, y, vx: drift, vy: speed, alive: true, settled: false, life: 1.0, phase: 'fall', restMs: 0 });
   }
 
   update(dtMs) {
@@ -74,13 +74,38 @@ export default class WeatherSnow {
       const f = this.flakes[i];
       if (!f.alive) { toRemove.push(i); continue; }
 
-      if (!f.settled) {
+      if (f.phase === 'fall') {
         f.vy = Math.min(140, f.vy + gAcc * dt);
         // small oscillation for flutter
         f.vx += Math.sin((f.y + i) * 0.02) * 7 * dt;
         let nx = f.x + f.vx * dt;
         let ny = f.y + f.vy * dt;
 
+        // Liquid interaction first
+        try {
+          if (typeof this.api.getLiquidSurfaceY === 'function') {
+            const sYwater = this.api.getLiquidSurfaceY('water', nx);
+            if (Number.isFinite(sYwater) && ny >= sYwater) {
+              // Land on water surface and rest for a bit
+              ny = sYwater - 0.5;
+              f.x = nx; f.y = ny; f.vx = 0; f.vy = 0;
+              f.phase = 'rest';
+              f.restMs = 800 + Math.random() * 400; // 0.8..1.2s
+              // Do not continue to solid collision checks this frame
+              // Update display and proceed to next flake
+              f.g.x = f.x; f.g.y = f.y;
+              continue;
+            }
+            const sYlava = this.api.getLiquidSurfaceY('lava', nx);
+            if (Number.isFinite(sYlava) && ny >= sYlava) {
+              // Steam puff and despawn
+              if (typeof this.api.onLavaImpact === 'function') this.api.onLavaImpact({ x: nx, y: sYlava, strength: 0.5 });
+              f.alive = false; toRemove.push(i); continue;
+            }
+          }
+        } catch {}
+
+        // Solid collision
         if (this.api.isSolidAt(nx, ny)) {
           // backtrack up to stand above the surface
           let guard = 0;
@@ -88,22 +113,33 @@ export default class WeatherSnow {
           f.settled = true;
           f.vx = 0;
           f.vy = 0;
+          f.phase = 'rest';
+          f.restMs = 800 + Math.random() * 400;
         }
 
         f.x = nx;
         f.y = ny;
-      } else {
-        // slowly fade out settled flakes (slightly faster to avoid long backlog)
-        f.life -= 0.28 * dt;
-        if (f.life <= 0) {
-          f.alive = false;
-          toRemove.push(i);
+      } else if (f.phase === 'rest') {
+        // Flake rests on surface for a short time (water or ground), then starts sinking/falling slowly
+        f.restMs -= dtMs;
+        if (f.restMs <= 0) {
+          f.phase = 'sinking';
+          // resume gentle fall with reduced alpha
+          f.vx = (Math.random() * 20 - 10);
+          f.vy = 20 + Math.random() * 20;
         }
+      } else if (f.phase === 'sinking') {
+        // Continue downward slowly; fade out progressively
+        f.vy = Math.min(60, f.vy + gAcc * 0.3 * dt);
+        f.x += f.vx * dt;
+        f.y += f.vy * dt;
+        f.life -= 0.22 * dt;
+        if (f.life <= 0) { f.alive = false; toRemove.push(i); }
       }
 
       f.g.x = f.x;
       f.g.y = f.y;
-      if (f.settled) f.g.alpha = Math.max(0, Math.min(1, f.life));
+      if (f.phase === 'rest' || f.phase === 'sinking' || f.settled) f.g.alpha = Math.max(0, Math.min(1, f.life));
 
       if (f.y > this.height + 40 || f.x < -40 || f.x > this.width + 40) {
         f.alive = false;

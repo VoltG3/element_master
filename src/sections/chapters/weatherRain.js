@@ -82,6 +82,31 @@ export default class WeatherRain {
       let nx = p.x + p.vx * dt;
       let ny = p.y + p.vy * dt;
 
+      // Liquid surface interaction: water/lava
+      try {
+        if (typeof this.api.getLiquidSurfaceY === 'function') {
+          // Prefer closest surface above current ny
+          const syWater = this.api.getLiquidSurfaceY('water', nx);
+          if (Number.isFinite(syWater) && ny >= syWater) {
+            // Hit water surface → spawn small splash and despawn
+            const speed = Math.max(0, Math.min(1500, p.vy));
+            const strength = Math.min(2, 0.4 + speed / 900);
+            if (typeof this.api.onWaterImpact === 'function') this.api.onWaterImpact({ x: nx, strength });
+            p.alive = false; toRemove.push(i);
+            continue;
+          }
+          const syLava = this.api.getLiquidSurfaceY('lava', nx);
+          if (Number.isFinite(syLava) && ny >= syLava) {
+            // Hit lava → steam puff and despawn
+            const speed = Math.max(0, Math.min(1500, p.vy));
+            const strength = Math.min(2, 0.35 + speed / 1200);
+            if (typeof this.api.onLavaImpact === 'function') this.api.onLavaImpact({ x: nx, y: syLava, strength });
+            p.alive = false; toRemove.push(i);
+            continue;
+          }
+        }
+      } catch {}
+
       // Collision check (treat as point)
       if (this.api.isSolidAt(nx, ny)) {
         // Backtrack slightly to stand above surface
