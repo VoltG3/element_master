@@ -4,14 +4,14 @@ import SectionHeader from "./sections/section.header";
 import SectionFooter from "./sections/section.footer";
 import SectionContent from "./sections/section.content";
 
-// Mēs importējam getRegistry vai default exportu. 
-// Pats imports jau garantē, ka kods GameRegistry.js izpildās un dati ielāsās atmiņā.
-import { getRegistry } from './GameRegistry'; 
+// Import the registry getter from the centralized engine registry
+// The import itself ensures that the registry code executes and data loads into memory.
+import { getRegistry } from './engine/registry';
 
 function App() {
-  
+
   useEffect(() => {
-    // Pārbaudām, vai dati ir atmiņā
+    // Verify that registry data is loaded into memory
     const items = getRegistry();
     console.log("App start - Current Registry in Memory:", items);
   }, []);
@@ -34,9 +34,4 @@ function App() {
       )
     }
 
-    // Izdzēšam šo daļu, jo tagad izmantojam GameRegistry.js
-    // const loadGameRegistry = () => { ... }
-    // const gameRegistry = loadGameRegistry();
-    // console.log("Game Registry Loaded:", gameRegistry);
-
-    export default App
+export default App

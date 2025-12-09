@@ -1,18 +1,12 @@
 import React, { useEffect, useRef } from 'react';
+import PropTypes from 'prop-types';
 import { Application, Container, Sprite, Texture, AnimatedSprite, Assets, TilingSprite, WRAP_MODES, BlurFilter, Graphics } from 'pixi.js';
 import { TextureCache } from '../../Pixi/TextureCache';
 import { ParallaxBackground } from '../../Pixi/layers/ParallaxBackground';
 import { TileChunkLayer } from '../../Pixi/layers/TileChunkLayer';
-import WeatherRain from './weatherRain';
-import WeatherSnow from './weatherSnow';
-import WeatherClouds from './weatherClouds';
-import WeatherFog from './weatherFog';
-import WeatherThunder from './weatherThunder';
-import WaterSplashFX from './liquids/WaterSplashFX';
-import LavaEmbers from './liquids/LavaEmbers';
-import LavaSteamFX from './liquids/LavaSteamFX';
+import { Rain as WeatherRain, Snow as WeatherSnow, Clouds as WeatherClouds, Fog as WeatherFog, Thunder as WeatherThunder } from '../../Pixi/effects/weather';
+import { WaterSplashFX, LavaEmbers, LavaSteamFX, LiquidRegionSystem } from '../../Pixi/effects/liquids';
 import HealthBar from '../../Pixi/ui/HealthBar';
-import LiquidRegionSystem from './LiquidRegionSystem';
 import LAYERS from '../../renderer/stage/layers/LayerOrder';
 
 // Suppress noisy Pixi Assets warnings for inlined data URLs (we load textures directly)
@@ -1237,6 +1231,32 @@ const PixiStage = ({
       style={{ width: mapWidth * tileSize, height: mapHeight * tileSize }}
     />
   );
+};
+
+PixiStage.propTypes = {
+  mapWidth: PropTypes.number.isRequired,
+  mapHeight: PropTypes.number.isRequired,
+  tileSize: PropTypes.number,
+  tileMapData: PropTypes.array,
+  objectMapData: PropTypes.array,
+  registryItems: PropTypes.array,
+  playerState: PropTypes.shape({
+    x: PropTypes.number,
+    y: PropTypes.number,
+    direction: PropTypes.number,
+    animation: PropTypes.string,
+    health: PropTypes.number,
+    width: PropTypes.number,
+    height: PropTypes.number,
+    projectiles: PropTypes.array
+  }),
+  playerVisuals: PropTypes.object,
+  backgroundImage: PropTypes.string,
+  backgroundColor: PropTypes.string,
+  backgroundParallaxFactor: PropTypes.number,
+  cameraScrollX: PropTypes.number,
+  shouldCenter: PropTypes.bool,
+  runtimeSettings: PropTypes.object
 };
 
 export default PixiStage;

@@ -1,13 +1,19 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import GameRegistry, { findItemById } from '../../core/registry'; // Pievienojam findItemById
+import { useDispatch, useSelector } from 'react-redux';
+import { getRegistry, findItemById } from '../../engine/registry';
 import PixiStage from './PixiStage';
-import { useGameEngine } from '../../utilites/useGameEngine'; // Importējam dzinēju
-import GameHeader from './gameHeader'; // JAUNS
+import { useGameEngine } from '../../utilities/useGameEngine';
+import GameHeader from './GameHeader';
 import GameTerminal from './GameTerminal';
 import GameSettings from './GameSettings';
-import BackgroundMusicPlayer from '../../utilites/BackgroundMusicPlayer';
+import BackgroundMusicPlayer from '../../utilities/BackgroundMusicPlayer';
+import { setActiveMap, removeObjectAtIndex, resetGame } from '../../store/slices/gameSlice';
+import { setMapModalOpen, setCameraScrollX, setShouldCenterMap } from '../../store/slices/uiSlice';
+import { setSoundEnabled } from '../../store/slices/settingsSlice';
+import errorHandler from '../../services/errorHandler';
+import styled from 'styled-components';
 
-// Importējam kartes (React/Webpack vidē statiskie faili parasti jāimportē vai jāielādē caur fetch)
+// Import maps (static files usually need to be imported or fetched in React/Webpack)
 import map1 from '../../assets/maps/Temp_01.json';
 import map2 from '../../assets/maps/Temp_02.json';
 import map3 from '../../assets/maps/Temp_03.json';
@@ -16,69 +22,179 @@ import map5 from '../../assets/maps/Temp_05.json';
 import map6 from '../../assets/maps/Temp_06.json';
 import map7 from '../../assets/maps/Temp_07.json';
 
-// Simulējam failu sarakstu no mapes
+// Simulate file list from folder
 const BUILT_IN_MAPS = [map1, map2, map3, map4, map5, map6, map7];
 
+// Styled Components
+const GameContainer = styled.div`
+    position: relative;
+    height: 100%;
+    overflow: hidden;
+    background-color: #333;
+`;
+
+const ModalOverlay = styled.div`
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+`;
+
+const ModalContent = styled.div`
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    width: 500px;
+    max-height: 80%;
+    overflow-y: auto;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+`;
+
+const ModalTitle = styled.h2`
+    margin: 0;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+`;
+
+const MapList = styled.div`
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+`;
+
+const MapCard = styled.div`
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 10px;
+    cursor: pointer;
+    background-color: #f9f9f9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    &:hover {
+        background-color: #e8e8e8;
+    }
+`;
+
+const MapTitle = styled.div`
+    font-weight: bold;
+    font-size: 16px;
+`;
+
+const MapAuthor = styled.div`
+    font-size: 12px;
+    color: #666;
+`;
+
+const MapInfo = styled.div`
+    text-align: right;
+    font-size: 11px;
+    color: #555;
+`;
+
+const ModalDivider = styled.div`
+    border-top: 2px solid #eee;
+    padding-top: 15px;
+    margin-top: 10px;
+`;
+
+const FileUploadLabel = styled.label`
+    padding: 8px 16px;
+    background-color: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    text-align: center;
+    display: inline-block;
+    width: 100%;
+    box-sizing: border-box;
+
+    &:hover {
+        background-color: #1976D2;
+    }
+`;
+
+const HiddenFileInput = styled.input`
+    display: none;
+`;
+
+const Viewport = styled.div`
+    height: 100%;
+    display: ${props => props.$centered ? 'flex' : 'block'};
+    align-items: ${props => props.$centered ? 'center' : 'stretch'};
+    justify-content: ${props => props.$centered ? 'center' : 'flex-start'};
+    overflow: auto;
+    filter: ${props => props.$blurred ? 'blur(5px)' : 'none'};
+    pointer-events: ${props => props.$blurred ? 'none' : 'auto'};
+    transition: filter 0.3s ease;
+`;
+
+const GameCanvas = styled.div`
+    position: relative;
+    width: ${props => props.$width}px;
+    height: ${props => props.$height}px;
+    border: 5px solid #222;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    background-color: #111;
+`;
+
+const PlaceholderMessage = styled.div`
+    color: #777;
+    font-size: 24px;
+`;
+
 export default function Game() {
+    const dispatch = useDispatch();
     const viewportRef = useRef(null);
-    const [isModalOpen, setIsModalOpen] = useState(true);
-    const [activeMapData, setActiveMapData] = useState(null);
-    const [cameraScrollX, setCameraScrollX] = useState(0);
+
+    // Redux state
+    const { activeMapData, tileMapData, objectMapData, mapWidth, mapHeight } = useSelector(state => state.game);
+    const { isMapModalOpen, cameraScrollX, shouldCenterMap } = useSelector(state => state.ui);
+    const { sound } = useSelector(state => state.settings);
+    const soundEnabled = sound.enabled;
+
     // Runtime settings that can be changed from GameSettings on the fly
     const [runtimeSettings, setRuntimeSettings] = useState({});
-    // Global sound toggle (persisted)
-    const [soundEnabled, setSoundEnabled] = useState(() => {
-        try {
-            const v = localStorage.getItem('game_sound_enabled');
-            return v === null ? false : v !== '0';
-        } catch { return false; }
-    });
 
-    // Spēles dati no kartes
-    const [mapWidth, setMapWidth] = useState(20);
-    const [mapHeight, setMapHeight] = useState(15);
-    // Center small maps that don't require scrolling
-    const [shouldCenter, setShouldCenter] = useState(false);
-    const [tileMapData, setTileMapData] = useState([]);
-    // JAUNS: Saglabājam arī objektu slāņa datus
-    const [objectMapData, setObjectMapData] = useState([]);
-
-    // Reģistrs
-    const registryItems = Array.isArray(GameRegistry) ? GameRegistry : [];
+    // Registry
+    const registryItems = getRegistry() || [];
 
     const handleGameOver = () => {
-        // Pārlādējam esošo karti
+        // Reload current map using Redux
         if (activeMapData) {
             console.log("Game Over! Reloading map...");
-            // Lai React saprastu izmaiņas un tiešām pārlādētu,
-            // mēs varam īslaicīgi notīrīt un tad uzstādīt atpakaļ, 
-            // vai vienkārši izsaukt loadMapData vēlreiz (ja tas resetos state).
-            // Bet tā kā loadMapData iestata state, tas var būt pietiekami, 
-            // ja vien mapData objekts nav tieši tas pats references ziņā (ko React varētu ignorēt).
-            // Drošāk ir nokopēt objektu.
             loadMapData({...activeMapData});
         }
     };
 
-    // JAUNS: Funkcija itemu noņemšanai
+    // NEW: Function for removing items - now uses Redux
     const handleStateUpdate = (action, payload) => {
         if (action === 'collectItem') {
             const indexToRemove = payload;
-            setObjectMapData(prevData => {
-                const newData = [...prevData];
-                newData[indexToRemove] = null; // Izņemam itemu no kartes
-                return newData;
-            });
+            dispatch(removeObjectAtIndex(indexToRemove));
         }
     };
 
-    // Mums vairs nevajag 'engineMapData' ar layers, jo mēs padodam objectMapData atsevišķi.
-    // Tāpēc mēs padodam oriģinālo 'activeMapData' kā pirmo argumentu (lai inicializācija strādātu korekti un neresetotos),
-    // un 'objectMapData' kā trešo argumentu priekš itemu pārbaudes.
-    
+    // We no longer need 'engineMapData' with layers, as we pass objectMapData separately.
+    // So we pass the original 'activeMapData' as first argument (for initialization to work correctly and not reset),
+    // and 'objectMapData' as third argument for item checking.
+
     // --- START ENGINE ---
-    // Dzinējs atgriež spēlētāja koordinātas un stāvokli
-    // objectMapData satur dinamiskos datus (izņemtos itemus)
+    // Engine returns player coordinates and state
+    // objectMapData contains dynamic data (removed items)
     const playerState = useGameEngine(activeMapData, tileMapData, objectMapData, registryItems, handleGameOver, handleStateUpdate);
 
     // Iegūstam spēlētāja vizuālo izskatu (Texture)
@@ -99,7 +215,7 @@ export default function Game() {
             const cw = mapWidth * 32;
             const ch = mapHeight * 32;
             const fits = cw <= vw && ch <= vh;
-            setShouldCenter(fits);
+            dispatch(setShouldCenterMap(fits));
             if (fits) {
                 // Ensure no residual scroll when centered
                 if ((vp.scrollLeft || vp.scrollTop)) {
@@ -110,12 +226,12 @@ export default function Game() {
         recalc();
         window.addEventListener('resize', recalc);
         return () => window.removeEventListener('resize', recalc);
-    }, [mapWidth, mapHeight, isModalOpen]);
+    }, [mapWidth, mapHeight, isMapModalOpen, dispatch]);
 
     // Camera follow with horizontal dead-zone on large maps (disabled when map is centered)
     useEffect(() => {
         const vp = viewportRef.current;
-        if (!vp || !activeMapData || isModalOpen || shouldCenter) return;
+        if (!vp || !activeMapData || isMapModalOpen || shouldCenterMap) return;
 
         const vw = vp.clientWidth || 0;
         const contentWidth = mapWidth * 32;
@@ -140,7 +256,7 @@ export default function Game() {
         if (Math.abs(targetLeft - currentLeft) > 0.5) {
             vp.scrollTo({ left: targetLeft, top: 0, behavior: 'auto' });
         }
-    }, [playerState, activeMapData, isModalOpen, mapWidth, shouldCenter]);
+    }, [playerState, activeMapData, isMapModalOpen, mapWidth, shouldCenterMap]);
 
     // Listen for runtime settings updates from GameSettings (live apply)
     useEffect(() => {
@@ -152,12 +268,12 @@ export default function Game() {
         return () => window.removeEventListener('game-settings-update', onSettingsUpdate);
     }, []);
 
-    // JAUNS: Klausāmies navigācijas pogas
+    // Listen for navigation buttons
     useEffect(() => {
-        const handleOpenModalEvent = () => setIsModalOpen(true);
+        const handleOpenModalEvent = () => dispatch(setMapModalOpen(true));
         window.addEventListener('open-new-game-modal', handleOpenModalEvent);
         return () => window.removeEventListener('open-new-game-modal', handleOpenModalEvent);
-    }, []);
+    }, [dispatch]);
 
     // Mirror current effective runtime settings for other components to read (like GameSettings)
     useEffect(() => {
@@ -185,39 +301,60 @@ export default function Game() {
     }, [runtimeSettings, activeMapData]);
 
     const loadMapData = (mapData) => {
-        if (!mapData) return;
+        try {
+            if (!mapData) {
+                errorHandler.warn('loadMapData called with empty mapData', { component: 'Game' });
+                return;
+            }
 
-        // Reset camera scroll when loading a new map
-        setCameraScrollX(0);
+            const w = mapData.meta?.width || mapData.width || 20;
+            const h = mapData.meta?.height || mapData.height || 15;
 
-        const w = mapData.meta?.width || mapData.width || 20;
-        const h = mapData.meta?.height || mapData.height || 15;
-        setMapWidth(w);
-        setMapHeight(h);
+            let tileData = [];
+            let objData = [];
 
-        if (mapData.layers) {
-            const bgLayer = mapData.layers.find(l => l.name === 'background');
-            setTileMapData(bgLayer ? bgLayer.data : Array(w * h).fill(null));
-        
-            // JAUNS: Ielādējam entities slāni priekš items
-            const objLayer = mapData.layers.find(l => l.name === 'entities');
-            setObjectMapData(objLayer ? objLayer.data : Array(w * h).fill(null));
+            if (mapData.layers) {
+                const bgLayer = mapData.layers.find(l => l.name === 'background');
+                tileData = bgLayer ? bgLayer.data : Array(w * h).fill(null);
 
-            // Mēs vairs neizmantojam 'entities' slāni renderēšanai pa tiešo,
-            // jo dzinējs izmanto to, lai atrastu starta pozīciju, bet pēc tam
-            // spēlētājs tiek renderēts dinamiski.
-        } else {
-            setTileMapData(mapData.tiles || Array(w * h).fill(null));
-            setObjectMapData(Array(w * h).fill(null));
+                const objLayer = mapData.layers.find(l => l.name === 'entities');
+                objData = objLayer ? objLayer.data : Array(w * h).fill(null);
+            } else {
+                tileData = mapData.tiles || Array(w * h).fill(null);
+                objData = Array(w * h).fill(null);
+            }
+
+            // Update Redux store
+            dispatch(setActiveMap({
+                mapData,
+                tileMapData: tileData,
+                objectMapData: objData,
+                mapWidth: w,
+                mapHeight: h
+            }));
+            dispatch(setCameraScrollX(0));
+            dispatch(setMapModalOpen(false));
+
+            errorHandler.info('Map loaded successfully', {
+                component: 'Game',
+                mapName: mapData.meta?.name || 'Unknown',
+                dimensions: `${w}x${h}`
+            });
+        } catch (error) {
+            errorHandler.error(error, {
+                component: 'Game',
+                function: 'loadMapData',
+                mapData
+            });
+            alert('Error loading map. Check console for details.');
         }
-
-        setActiveMapData(mapData);
-        setIsModalOpen(false);
     };
 
     const handleCustomMapUpload = (event) => {
-        const file = event.target.files[0];
-        if (file) {
+        try {
+            const file = event.target.files[0];
+            if (!file) return;
+
             const fileReader = new FileReader();
             fileReader.readAsText(file, "UTF-8");
             fileReader.onload = (e) => {
@@ -225,75 +362,78 @@ export default function Game() {
                     const loaded = JSON.parse(e.target.result);
                     loadMapData(loaded);
                 } catch (error) {
-                    console.error("Error parsing JSON:", error);
-                    alert("Invalid map file!");
+                    errorHandler.error(error, {
+                        component: 'Game',
+                        function: 'handleCustomMapUpload',
+                        fileName: file.name
+                    });
+                    alert("Invalid map file! Check console for details.");
                 }
             };
+            fileReader.onerror = (error) => {
+                errorHandler.error(error, {
+                    component: 'Game',
+                    function: 'handleCustomMapUpload',
+                    fileName: file.name,
+                    phase: 'fileReader'
+                });
+                alert("Error reading file!");
+            };
+        } catch (error) {
+            errorHandler.error(error, {
+                component: 'Game',
+                function: 'handleCustomMapUpload'
+            });
         }
     };
 
-    // Stili (kā iepriekš)
-    const modalOverlayStyle = { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0, 0, 0, 0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(2px)' };
-    const modalContentStyle = { backgroundColor: '#fff', padding: '20px', borderRadius: '8px', width: '500px', maxHeight: '80%', overflowY: 'auto', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', gap: '15px' };
-    const mapCardStyle = { border: '1px solid #ddd', borderRadius: '6px', padding: '10px', cursor: 'pointer', backgroundColor: '#f9f9f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
-    const buttonStyle = { padding: '8px 16px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', textAlign: 'center', display: 'inline-block' };
-
     return (
-        <div style={{ position: 'relative', height: '100%', overflow: 'hidden', backgroundColor: '#333' }}>
+        <GameContainer>
         
-            {/* JAUNS: Game Header */}
+            {/* Game Header */}
             <GameHeader health={playerState.health} ammo={playerState.ammo || 0} soundEnabled={soundEnabled} onToggleSound={() => {
                 const next = !soundEnabled;
-                setSoundEnabled(next);
-                try { localStorage.setItem('game_sound_enabled', next ? '1' : '0'); } catch {}
+                dispatch(setSoundEnabled(next));
                 try { window.dispatchEvent(new CustomEvent('game-sound-toggle', { detail: { enabled: next } })); } catch {}
-                // Also signal a user gesture to unblock autoplay on first enable
                 try { window.dispatchEvent(new CustomEvent('game-sound-user-gesture')); } catch {}
             }} />
 
-        
-            {isModalOpen && (
-                <div style={modalOverlayStyle}>
-                    <div style={modalContentStyle}>
-                        <h2 style={{ margin: 0, borderBottom: '2px solid #eee', paddingBottom: '10px' }}>Select a Map</h2>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+
+            {isMapModalOpen && (
+                <ModalOverlay>
+                    <ModalContent>
+                        <ModalTitle>Select a Map</ModalTitle>
+                        <MapList>
                             {BUILT_IN_MAPS.map((map, index) => (
-                                <div key={index} style={mapCardStyle} onClick={() => loadMapData(map)}>
+                                <MapCard key={index} onClick={() => loadMapData(map)}>
                                     <div>
-                                        <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{map.meta?.name || "Unnamed Map"}</div>
-                                        <div style={{ fontSize: '12px', color: '#666' }}>By: {map.meta?.author || "Unknown"}</div>
+                                        <MapTitle>{map.meta?.name || "Unnamed Map"}</MapTitle>
+                                        <MapAuthor>By: {map.meta?.author || "Unknown"}</MapAuthor>
                                     </div>
-                                    <div style={{ textAlign: 'right', fontSize: '11px', color: '#555' }}>
+                                    <MapInfo>
                                         <div>Size: {map.meta?.width}x{map.meta?.height}</div>
-                                    </div>
-                                </div>
+                                    </MapInfo>
+                                </MapCard>
                             ))}
-                        </div>
-                        <div style={{ borderTop: '2px solid #eee', paddingTop: '15px', marginTop: '10px' }}>
-                            <label style={{ ...buttonStyle, backgroundColor: '#2196F3', width: '100%', boxSizing: 'border-box' }}>
+                        </MapList>
+                        <ModalDivider>
+                            <FileUploadLabel>
                                 📂 Load Custom Map from Computer
-                                <input type="file" accept=".json" onChange={handleCustomMapUpload} style={{ display: 'none' }} />
-                            </label>
-                        </div>
-                    </div>
-                </div>
+                                <HiddenFileInput type="file" accept=".json" onChange={handleCustomMapUpload} />
+                            </FileUploadLabel>
+                        </ModalDivider>
+                    </ModalContent>
+                </ModalOverlay>
             )}
 
-            <div ref={viewportRef} onScroll={(e) => setCameraScrollX(e.currentTarget.scrollLeft || 0)} style={{ 
-                height: '100%',
-                display: shouldCenter ? 'flex' : 'block',
-                alignItems: shouldCenter ? 'center' : 'stretch',
-                justifyContent: shouldCenter ? 'center' : 'flex-start',
-                overflow: 'auto',
-                filter: isModalOpen ? 'blur(5px)' : 'none', pointerEvents: isModalOpen ? 'none' : 'auto', transition: 'filter 0.3s ease'
-            }}>
+            <Viewport
+                ref={viewportRef}
+                onScroll={(e) => dispatch(setCameraScrollX(e.currentTarget.scrollLeft || 0))}
+                $centered={shouldCenterMap}
+                $blurred={isMapModalOpen}
+            >
                 {activeMapData ? (
-                    <div style={{ 
-                        position: 'relative', // Lai player varētu pozicionēt absolute pret šo konteineri
-                        width: mapWidth * 32,
-                        height: mapHeight * 32,
-                        border: '5px solid #222', boxShadow: '0 0 20px rgba(0,0,0,0.5)', backgroundColor: '#111'
-                    }}>
+                    <GameCanvas $width={mapWidth * 32} $height={mapHeight * 32}>
                     
                         {/* PIXI RENDERER */}
                         <PixiStage
@@ -322,17 +462,18 @@ export default function Game() {
                             lavaEmbersEnabled={runtimeSettings.lavaEmbersEnabled ?? true}
                         />
 
-                    </div>
+                    </GameCanvas>
                 ) : (
-                    <div style={{ color: '#777', fontSize: '24px' }}>Select a map to start playing</div>
+                    <PlaceholderMessage>Select a map to start playing</PlaceholderMessage>
                 )}
-            </div>
+            </Viewport>
+
             {/* Background music runtime player */}
             <BackgroundMusicPlayer metaPath={activeMapData?.meta?.backgroundMusic} enabled={soundEnabled} volume={0.6} />
 
             {/* Overlays at root level so they sit above the canvas and slide from the footer area */}
             <GameSettings />
             <GameTerminal />
-        </div>
+        </GameContainer>
     );
 }

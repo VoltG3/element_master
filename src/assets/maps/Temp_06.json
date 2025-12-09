@@ -11,7 +11,7 @@
     "backgroundImage": "/assets/background/seamless_01.jpg",
     "backgroundColor": null,
     "backgroundParallaxFactor": 0.3,
-    "backgroundMusic": "/assets/assets/sound/background/170515__rolandasb__forest_ambient_01_loop.ogg"
+    "backgroundMusic": "/assets/sound/background/170515__rolandasb__forest_ambient_01_loop.ogg"
   },
   "statistics": {
     "total_tiles": 3531,

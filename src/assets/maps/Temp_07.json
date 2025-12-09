@@ -11,7 +11,7 @@
     "backgroundImage": "/assets/background/seamless_06.jpg",
     "backgroundColor": null,
     "backgroundParallaxFactor": 0.2,
-    "backgroundMusic": "/assets/assets/assets/assets/assets/sound/background/830253__nicktayloe__afternoon-woods-in-october-midwest-us-loop.ogg"
+    "backgroundMusic": "/assets/sound/background/830253__nicktayloe__afternoon-woods-in-october-midwest-us-loop.ogg"
   },
   "statistics": {
     "total_tiles": 4455,

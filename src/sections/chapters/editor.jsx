@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import GameRegistry from '../../core/registry';
-import AnimatedItem from '../../utilites/AnimatedItem';
-import BackgroundMusicPlayer from '../../utilites/BackgroundMusicPlayer';
-import saveFile from '../../utilites/saveFile';
+import { getRegistry } from '../../engine/registry';
+import AnimatedItem from '../../utilities/AnimatedItem';
+import BackgroundMusicPlayer from '../../utilities/BackgroundMusicPlayer';
+import saveFile from '../../utilities/saveFile';
+import { TILE_SIZE } from '../../constants/gameConstants';
+import errorHandler from '../../services/errorHandler';
 
-// ... PaletteSection komponente ... (bez izmaiņām)
+// PaletteSection component (no changes)
 const PaletteSection = ({ title, children, isOpenDefault = false }) => {
     const [isOpen, setIsOpen] = useState(isOpenDefault);
     return (
@@ -18,7 +20,7 @@ const PaletteSection = ({ title, children, isOpenDefault = false }) => {
 };
 
 export const Editor = () => {
-// ... existing code (states, effects, helpers) ...
+    // Editor state: map dimensions, tile/object data, selected tile, tools
     const [mapWidth, setMapWidth] = useState(20);
     const [mapHeight, setMapHeight] = useState(15);
     const [tileMapData, setTileMapData] = useState([]);
@@ -38,7 +40,7 @@ export const Editor = () => {
     const bucketTimerRef = useRef(null);
     const stateRef = useRef({ mapWidth, mapHeight, tileMapData, objectMapData });
 
-    // JAUNIE STATE MAINĪGIE
+    // NEW STATE VARIABLES (map metadata)
     const [mapName, setMapName] = useState("New Map");
     const [creatorName, setCreatorName] = useState("Anonymous");
     const [createdAt, setCreatedAt] = useState(null);
@@ -56,7 +58,7 @@ export const Editor = () => {
         setObjectMapData(Array(size).fill(null));
     }, []);
 
-    const registryItems = Array.isArray(GameRegistry) ? GameRegistry : [];
+    const registryItems = getRegistry() || [];
     // Separate regular blocks and liquids so they appear in distinct palettes
     const blocks = registryItems.filter(item => item.name && item.name.startsWith('block.') && !(item.flags && item.flags.liquid));
     const liquids = registryItems.filter(item => item.flags && item.flags.liquid);
@@ -94,14 +96,14 @@ export const Editor = () => {
     const buttonStyle = { ...baseButtonStyle };
     const activeButtonStyle = { ...baseButtonStyle, backgroundColor: '#aaa', borderColor: '#000', fontWeight: 'bold' };
 
-    // JAUNS: Funkcija lai atvērtu "New Map" modālo logu
+    // NEW: Function to open "New Map" modal
     const openNewMapModal = () => {
         setTempMapName("New Map");
         setTempCreatorName(creatorName);
         setIsNewMapModalOpen(true);
     };
 
-    // JAUNS: Funkcija lai apstiprinātu jaunas kartes izveidi
+    // NEW: Function to confirm new map creation
     const confirmNewMap = () => {
         if (window.confirm("Are you sure you want to create a new map? Unsaved changes will be lost.")) {
             const size = 20 * 15;
@@ -135,8 +137,8 @@ export const Editor = () => {
     const saveMap = async () => {
         const currentDate = new Date().toISOString();
         const createdDate = createdAt || currentDate;
-        
-        // Statistikas aprēķins
+
+        // Statistics calculation
         const filledBlocks = tileMapData.filter(t => t !== null).length;
         const objectsCount = objectMapData.filter(o => o !== null).length;
         const itemsCount = objectMapData.filter(o => {
@@ -146,21 +148,21 @@ export const Editor = () => {
         }).length;
 
         const mapData = {
-            meta: { 
-                width: mapWidth, 
-                height: mapHeight, 
-                tileSize: 32, 
+            meta: {
+                width: mapWidth,
+                height: mapHeight,
+                tileSize: 32,
                 version: "1.0",
-                name: mapName, // 1. Mapes nosaukums
-                author: creatorName, // 2. Autora nickname
-                date_map_created_at: createdDate, // 3. Izveides datums
-                date_map_last_updated: currentDate, // 4. Pēdējās izmaiņas
-                backgroundImage: selectedBackgroundImage || null, // 5. Fona bilde (seamless)
-                backgroundColor: selectedBackgroundImage ? null : selectedBackgroundColor, // 5.1. Fona krāsa, ja nav bildes
-                backgroundParallaxFactor: backgroundParallaxFactor, // 6. Parallakses koeficients
+                name: mapName, // 1. Map name
+                author: creatorName, // 2. Author nickname
+                date_map_created_at: createdDate, // 3. Creation date
+                date_map_last_updated: currentDate, // 4. Last update
+                backgroundImage: selectedBackgroundImage || null, // 5. Background image (seamless)
+                backgroundColor: selectedBackgroundImage ? null : selectedBackgroundColor, // 5.1. Background color if no image
+                backgroundParallaxFactor: backgroundParallaxFactor, // 6. Parallax coefficient
                 backgroundMusic: selectedBackgroundMusic || null // 7. Background music track (ogg)
             },
-            statistics: { // 5. Papildus statistika
+            statistics: { // Additional statistics
                 total_tiles: mapWidth * mapHeight,
                 filled_tiles: filledBlocks,
                 total_objects: objectsCount,
@@ -168,18 +170,30 @@ export const Editor = () => {
             },
             layers: [ { type: "tile", name: "background", data: tileMapData }, { type: "object", name: "entities", data: objectMapData } ]
         };
-        // Failā nosaukumā izmantojam kartes nosaukumu, aizvietojot atstarpes
+        // Use map name for filename, replacing spaces
         const fileName = `${mapName.replace(/\s+/g, '_')}.json`;
         const json = JSON.stringify(mapData, null, 2);
         // Use native save dialog when available (lets user select directory), fallback to download
         try {
             const saved = await saveFile(json, fileName, 'application/json');
             if (saved) {
-                // Iestatām izveides datumu, ja tas vēl nebija
+                // Set creation date if not already set
                 if (!createdAt) setCreatedAt(currentDate);
+                errorHandler.info('Map saved successfully', {
+                    component: 'Editor',
+                    mapName,
+                    fileName,
+                    dimensions: `${mapWidth}x${mapHeight}`
+                });
             }
-        } catch (e) {
-            console.error('Failed to save map:', e);
+        } catch (error) {
+            errorHandler.error(error, {
+                component: 'Editor',
+                function: 'saveMap',
+                mapName,
+                fileName
+            });
+            alert('Failed to save map. Check console for details.');
         }
     };
 
@@ -193,12 +207,12 @@ export const Editor = () => {
                     const loaded = JSON.parse(e.target.result);
                     if (loaded.meta) {
                         setMapWidth(loaded.meta.width); setMapHeight(loaded.meta.height);
-                        
-                        // Ielādējam metadatus
+
+                        // Load metadata
                         if (loaded.meta.name) setMapName(loaded.meta.name);
                         if (loaded.meta.author) setCreatorName(loaded.meta.author);
                         if (loaded.meta.date_map_created_at) setCreatedAt(loaded.meta.date_map_created_at);
-                        // Jaunais: fona bilde un parallakse
+                        // New: background image and parallax
                         if (typeof loaded.meta.backgroundImage !== 'undefined' && loaded.meta.backgroundImage) {
                             setSelectedBackgroundImage(loaded.meta.backgroundImage);
                         } else {
@@ -224,13 +238,40 @@ export const Editor = () => {
                         const bgLayer = loaded.layers.find(l => l.name === 'background');
                         const objLayer = loaded.layers.find(l => l.name === 'entities');
                         if (bgLayer) setTileMapData(bgLayer.data); if (objLayer) setObjectMapData(objLayer.data);
+
+                        errorHandler.info('Map loaded successfully', {
+                            component: 'Editor',
+                            mapName: loaded.meta.name,
+                            dimensions: `${loaded.meta.width}x${loaded.meta.height}`
+                        });
                     } else {
-                        // Vecais formāts vai cits fails
+                        // Old format or different file
                         if (loaded.width) setMapWidth(loaded.width); if (loaded.height) setMapHeight(loaded.height);
                         if (loaded.tiles) setTileMapData(loaded.tiles);
                         setObjectMapData(Array(loaded.width * loaded.height).fill(null));
+
+                        errorHandler.warn('Loaded map in legacy format', {
+                            component: 'Editor',
+                            fileName: file.name
+                        });
                     }
-                } catch (error) { console.error("Error parsing JSON:", error); }
+                } catch (error) {
+                    errorHandler.error(error, {
+                        component: 'Editor',
+                        function: 'loadMap',
+                        fileName: file.name
+                    });
+                    alert('Error loading map. Check console for details.');
+                }
+            };
+            fileReader.onerror = (error) => {
+                errorHandler.error(error, {
+                    component: 'Editor',
+                    function: 'loadMap',
+                    fileName: file.name,
+                    phase: 'fileReader'
+                });
+                alert('Error reading file!');
             };
         }
     };
@@ -388,7 +429,6 @@ export const Editor = () => {
         e.preventDefault(); e.stopPropagation();
         const startX = e.clientX; const startY = e.clientY;
         const { mapWidth: startW, mapHeight: startH } = stateRef.current;
-        const TILE_SIZE = 32;
         const onMouseMove = (moveEvent) => {
             const dx = moveEvent.clientX - startX; const dy = moveEvent.clientY - startY;
             if (direction === 'width') {
@@ -410,7 +450,7 @@ export const Editor = () => {
         setSelection(null);
     };
 
-    // Paletes items ar animāciju
+    // Palette items with animation
     const renderPaletteItem = (item, color, layer) => {
         const hasImage = !!(item.texture || (Array.isArray(item.textures) && item.textures.length > 0));
         const isLiquid = !!(item.flags && item.flags.liquid);
@@ -459,14 +499,14 @@ export const Editor = () => {
 
     const totalTiles = mapWidth * mapHeight; const filledBlocks = tileMapData.filter(t => t !== null).length; const emptyBlocks = totalTiles - filledBlocks; const objectsCount = objectMapData.filter(o => o !== null).length;
 
-    // Definējam gridColor šeit, lai tas būtu pieejams renderēšanas daļā
+    // Define gridColor here so it's available in rendering section
     const gridColor = showGrid
         ? (activeLayer === 'tile' ? 'rgba(0, 0, 255, 0.1)' : 'rgba(255, 0, 0, 0.1)')
         : 'transparent';
 
     return (
         <div className="editor-wrapper" style={{ position: 'relative', height: '100%', overflow: 'hidden' }}>
-            {/* Modālais logs */}
+            {/* Modal window */}
             {isNewMapModalOpen && (
                 <div style={{
                     position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',

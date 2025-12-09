@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { getRegistry } from '../../GameRegistry';
-import AnimatedItem from '../../utilites/AnimatedItem';
+import { getRegistry } from '../../engine/registry';
+import AnimatedItem from '../../utilities/AnimatedItem';
 
 export default function Repository() {
     const registryItems = getRegistry();
 
-    // Stils konteinerim, lai elementi izkārtotos glīti (Grid)
+    // Container style for grid layout
     const containerStyle = {
         display: 'flex',
         flexWrap: 'wrap',
@@ -13,7 +13,7 @@ export default function Repository() {
         padding: '20px'
     };
 
-    // Stils katrai kartītei
+    // Style for each card
     const cardStyle = {
         border: '1px solid #ccc',
         borderRadius: '8px',
@@ -25,12 +25,12 @@ export default function Repository() {
         backgroundColor: '#f9f9f9'
     };
 
-    // Stils bildei (64x64)
+    // Image style (64x64)
     const imageStyle = {
         width: '64px',
         height: '64px',
-        objectFit: 'contain', // Lai bilde neizstaipītos, ja proporcijas nav perfektas
-        imageRendering: 'pixelated', // Svarīgi pikseļu grafikai (2D spēlēm)
+        objectFit: 'contain', // Prevent image stretching if proportions aren't perfect
+        imageRendering: 'pixelated', // Important for pixel graphics (2D games)
         marginBottom: '10px',
         border: '1px dashed #aaa'
     };
@@ -46,7 +46,7 @@ export default function Repository() {
             {registryItems.map((item, index) => (
                 <div key={item.id || index} style={cardStyle}>
                     
-                    {/* Izvēlamies: Animācija vai Parasta bilde */}
+                    {/* Choose: Animation or Static image */}
                     {item.textures && item.textures.length > 0 ? (
                         <AnimatedItem
                             textures={item.textures}
@@ -64,7 +64,7 @@ export default function Repository() {
                         />
                     )}
 
-                    {/* Filtrējam ārā gan 'texture', gan 'textures', gan 'animationSpeed' no teksta saraksta */}
+                    {/* Filter out 'texture', 'textures', and 'animationSpeed' from text list */}
                     <div style={fieldsContainerStyle}>
                         {Object.entries(item)
                             .filter(([key]) => !['texture', 'textures', 'animationSpeed'].includes(key))

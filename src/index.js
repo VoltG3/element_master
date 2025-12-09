@@ -1,9 +1,11 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import reducer from './redux/reducer'
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 import { Provider } from 'react-redux'
-import { configureStore } from '@reduxjs/toolkit'
+import { ThemeProvider } from 'styled-components'
+import store from './store'
+import theme from './styles/theme'
+import GlobalStyles from './styles/GlobalStyles'
 import './i18n/i18n'
 import './index.css'
 import App from './App'
@@ -13,15 +15,13 @@ import {Editor} from "./sections/chapters/editor"
 import Crystals from "./sections/chapters/crystals"
 import Repository from "./sections/chapters/repository"
 
-const store = configureStore({
-    reducer: reducer,
-})
-
 const root = ReactDOM.createRoot(document.getElementById('root'))
 root.render(
     <Provider store={store}>
-        <BrowserRouter>
-            <Routes>
+        <ThemeProvider theme={theme}>
+            <GlobalStyles />
+            <BrowserRouter>
+                <Routes>
 
                 <Route path="/" element={<App />}>
                     <Route index element={<Home />} />
@@ -31,7 +31,8 @@ root.render(
                     <Route path="repository" element={<Repository />} />
                 </Route>
 
-            </Routes>
-        </BrowserRouter>
+                </Routes>
+            </BrowserRouter>
+        </ThemeProvider>
     </Provider>
 )

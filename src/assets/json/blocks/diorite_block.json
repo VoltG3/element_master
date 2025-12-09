@@ -1,0 +1,13 @@
+{
+  "id": "diorite_block",
+  "name": "block.dirt",
+  "width": "1",
+  "height": "1",
+  "texture": "/assets/images/blocks/diorite_block.png",
+  "collision": {
+    "top": true,
+    "bottom": true,
+    "left": true,
+    "right": true
+  }
+}
