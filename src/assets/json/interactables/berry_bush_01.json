@@ -1,0 +1,13 @@
+{
+  "id": "berry_bush_01",
+  "name": "interactable.berry_bush_01",
+  "width": "1",
+  "height": "1",
+  "texture": "/assets/images/interactables/berry_bush_01_A.png",
+  "pickup": true,
+  "effect": {
+    "health": "1"
+  },
+  "sfx": "/assets/sound/sfx/zzox-fx_sling-selector.ogg",
+  "sfxVolume": 0.85
+}

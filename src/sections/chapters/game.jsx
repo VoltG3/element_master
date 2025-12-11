@@ -3,11 +3,11 @@ import { useDispatch, useSelector } from 'react-redux';
 import { getRegistry, findItemById } from '../../engine/registry';
 import PixiStage from './PixiStage';
 import { useGameEngine } from '../../utilities/useGameEngine';
-import GameHeader from './GameHeader';
-import GameTerminal from './GameTerminal';
-import GameSettings from './GameSettings';
+import GameHeader from './game/GameHeader';
+import GameTerminal from './game/GameTerminal';
+import GameSettings from './game/GameSettings';
 import BackgroundMusicPlayer from '../../utilities/BackgroundMusicPlayer';
-import { setActiveMap, removeObjectAtIndex, resetGame } from '../../store/slices/gameSlice';
+import { setActiveMap, removeObjectAtIndex, updateObjectAtIndex, setObjectTextureIndex, resetGame } from '../../store/slices/gameSlice';
 import { setMapModalOpen, setCameraScrollX, setShouldCenterMap } from '../../store/slices/uiSlice';
 import { setSoundEnabled } from '../../store/slices/settingsSlice';
 import errorHandler from '../../services/errorHandler';
@@ -161,7 +161,7 @@ export default function Game() {
     const viewportRef = useRef(null);
 
     // Redux state
-    const { activeMapData, tileMapData, objectMapData, mapWidth, mapHeight } = useSelector(state => state.game);
+    const { activeMapData, tileMapData, objectMapData, objectTextureIndices, mapWidth, mapHeight } = useSelector(state => state.game);
     const { isMapModalOpen, cameraScrollX, shouldCenterMap } = useSelector(state => state.ui);
     const { sound } = useSelector(state => state.settings);
     const soundEnabled = sound.enabled;
@@ -180,11 +180,19 @@ export default function Game() {
         }
     };
 
-    // NEW: Function for removing items - now uses Redux
+    // NEW: Function for removing items and updating interactables - now uses Redux
     const handleStateUpdate = (action, payload) => {
         if (action === 'collectItem') {
             const indexToRemove = payload;
             dispatch(removeObjectAtIndex(indexToRemove));
+        } else if (action === 'interactable') {
+            const index = payload;
+            // Switch interactable to "used" variant by changing ID
+            // e.g., berry_bush_01 -> berry_bush_01_used
+            const currentId = objectMapData[index];
+            if (currentId) {
+                dispatch(updateObjectAtIndex({ index, newId: currentId + '_used' }));
+            }
         }
     };
 
@@ -442,6 +450,7 @@ export default function Game() {
                             tileSize={32}
                             tileMapData={tileMapData}
                             objectMapData={objectMapData}
+                            objectTextureIndices={objectTextureIndices}
                             registryItems={registryItems}
                             playerState={playerState}
                             playerVisuals={playerVisuals}

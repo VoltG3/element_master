@@ -9,6 +9,7 @@ const initialState = {
   activeMapData: null,
   tileMapData: [],
   objectMapData: [],
+  objectTextureIndices: {}, // Track texture index per object position { index: textureIndex }
   mapWidth: 20,
   mapHeight: 15,
   isLoading: false,
@@ -26,6 +27,7 @@ const gameSlice = createSlice({
       state.activeMapData = mapData;
       state.tileMapData = tileMapData;
       state.objectMapData = objectMapData;
+      state.objectTextureIndices = {}; // Reset texture indices on new map
       state.mapWidth = mapWidth;
       state.mapHeight = mapHeight;
       state.isGameOver = false;
@@ -38,6 +40,16 @@ const gameSlice = createSlice({
       if (state.objectMapData[index] !== undefined) {
         state.objectMapData[index] = null;
       }
+    },
+    updateObjectAtIndex: (state, action) => {
+      const { index, newId } = action.payload;
+      if (state.objectMapData[index] !== undefined) {
+        state.objectMapData[index] = newId;
+      }
+    },
+    setObjectTextureIndex: (state, action) => {
+      const { index, textureIndex } = action.payload;
+      state.objectTextureIndices[index] = textureIndex;
     },
     setLoading: (state, action) => {
       state.isLoading = action.payload;
@@ -61,6 +73,8 @@ export const {
   setActiveMap,
   updateObjectMap,
   removeObjectAtIndex,
+  updateObjectAtIndex,
+  setObjectTextureIndex,
   setLoading,
   setError,
   setPaused,

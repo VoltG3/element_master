@@ -1,4 +1,4 @@
-/**
+[]/**
  * Game Registry Module
  * Loads all JSON files and creates a registry array.
  * Executed only once during initialization.
@@ -33,15 +33,8 @@ const initRegistry = () => {
             soundContext = null;
         }
 
-        // Legacy support removed - using single sound directory now
-        let soundContextAlt = null;
-        try {
-            // Alternative path for backwards compatibility if needed
-            soundContextAlt = require.context('../../assets/sounds', true, /\.(mp3|wav|ogg|m4a|aac|flac|webm)$/);
-        } catch (e) {
-            soundContextAlt = null;
-        }
-        if (!soundContext && !soundContextAlt) {
+        // Check if sound context is available
+        if (!soundContext) {
             console.warn('Sound context unavailable. Continuing without pre-resolved sound assets.');
         }
 
@@ -65,7 +58,7 @@ const initRegistry = () => {
         let _warnedUnresolvedSound = false;
         const resolveSound = (rawPath) => {
             if (!rawPath) return null;
-            // mēģinām atrisināt, ja ir kāds no kontekstiem; atbalstām gan "sounds/", gan "sound/"
+            // Normalize path for sound context
             const normalize = (p) => {
                 let out = p;
                 out = out.replace('/assets/sounds/', './').replace('src/assets/sounds/', './');
@@ -73,23 +66,16 @@ const initRegistry = () => {
                 return out.startsWith('./') ? out : `./${out}`;
             };
             const rel = normalize(rawPath);
-            // Primārais: plural
+            // Try to resolve with sound context
             if (soundContext) {
                 try {
                     const mod = soundContext(rel);
                     return mod.default || mod;
                 } catch {}
             }
-            // Alternatīvais: singular
-            if (soundContextAlt) {
-                try {
-                    const mod = soundContextAlt(rel);
-                    return mod.default || mod;
-                } catch {}
-            }
-            // Nav atrisināms bundlerī — atgriežam izejas ceļu, lai mēģina public ceļu
+            // Unable to resolve in bundler — return original path to try loading via public URL
             if (!_warnedUnresolvedSound) {
-                console.warn(`SFX not bundled: ${rawPath}. Will try loading via public URL. Place files under src/assets/sounds or src/assets/sound, or copy to public/assets/sounds.`);
+                console.warn(`SFX not bundled: ${rawPath}. Will try loading via public URL. Place files under src/assets/sound, or copy to public/assets/sound.`);
                 _warnedUnresolvedSound = true;
             }
             return rawPath;

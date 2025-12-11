@@ -32,7 +32,7 @@ export function updateFrame(ctx, timestamp) {
   const { gameState, isInitialized, lastTimeRef, projectilesRef, shootCooldownRef, liquidDamageAccumulatorRef, oxygenDepleteAccRef, lavaDepleteAccRef } = refs;
   const { TILE_SIZE, GRAVITY, TERMINAL_VELOCITY, MOVE_SPEED, JUMP_FORCE } = constants;
   const { checkCollision, isWaterAt, getLiquidSample } = helpers;
-  const { collectItem, checkHazardDamage, spawnProjectile, updateProjectiles, setPlayer, onGameOver } = actions;
+  const { collectItem, checkInteractables, checkHazardDamage, spawnProjectile, updateProjectiles, setPlayer, onGameOver } = actions;
 
   // Keep RAF alive even if init not finished yet
   if (!isInitialized.current || !mapData) {
@@ -66,7 +66,8 @@ export function updateFrame(ctx, timestamp) {
     height,
     isGrounded,
     direction,
-    animation
+    animation,
+    ammo
   } = gameState.current;
 
   // 1) Horizontal movement
@@ -226,17 +227,23 @@ export function updateFrame(ctx, timestamp) {
   // 3) Item collection
   collectItem(x, y, mapWidth, objectData);
 
+  // 3.5) Interactables check (berry bushes etc.)
+  try { checkInteractables(x, y, mapWidth, objectData); } catch {}
+
   // 4) Hazard damage check (bushes etc.)
   try { checkHazardDamage(x, y, mapWidth, objectData, deltaMs); } catch {}
 
   // 5) Shooting & projectiles
   // Cooldown update
   if (shootCooldownRef.current > 0) shootCooldownRef.current = Math.max(0, shootCooldownRef.current - deltaMs);
-  if (keys?.mouseLeft && shootCooldownRef.current <= 0) {
+  // Get fresh ammo value after item collection
+  const currentAmmo = Math.max(0, Number(gameState.current.ammo) || 0);
+  if (keys?.mouseLeft && shootCooldownRef.current <= 0 && currentAmmo > 0) {
     const originX = x + width / 2;
     const originY = y + height / 2;
     spawnProjectile(originX, originY, direction >= 0 ? 1 : -1);
     shootCooldownRef.current = 350; // ms cooldown
+    gameState.current.ammo = Math.max(0, currentAmmo - 1);
   }
   // Update existing projectiles
   try { updateProjectiles(deltaMs, mapWidth, mapHeight); } catch {}

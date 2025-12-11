@@ -27,6 +27,7 @@ const PixiStage = ({
   tileSize = 32,
   tileMapData = [],
   objectMapData = [],
+  objectTextureIndices = {},
   registryItems = [],
   playerState,
   playerVisuals,
@@ -1056,7 +1057,13 @@ const PixiStage = ({
         if (frames && frames.length > 0) {
           sprite = new AnimatedSprite(frames);
           sprite.animationSpeed = msToSpeed(def.animationSpeed);
-          sprite.play();
+          // Check if this object has a specific texture index override
+          const textureIndex = objectTextureIndices[i];
+          if (typeof textureIndex === 'number' && textureIndex >= 0 && textureIndex < frames.length) {
+            sprite.gotoAndStop(textureIndex); // Show specific frame (e.g., used berry bush)
+          } else {
+            sprite.play(); // Normal animation
+          }
         } else {
           const tex = getTexture(def.texture) || null;
           if (!tex) continue;
@@ -1076,7 +1083,7 @@ const PixiStage = ({
         }
       }
     }
-  }, [tileMapData, objectMapData, registryItems, mapWidth, mapHeight, tileSize]);
+  }, [tileMapData, objectMapData, objectTextureIndices, registryItems, mapWidth, mapHeight, tileSize]);
 
   // Weather systems lifecycle and intensity updates
   useEffect(() => {

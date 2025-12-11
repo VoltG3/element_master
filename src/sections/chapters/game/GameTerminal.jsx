@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { executeCommand } from '../../commands/gameCommands';
+import { executeCommand } from '../../../commands/gameCommands';
 
 const panelStyleBase = {
   position: 'fixed',

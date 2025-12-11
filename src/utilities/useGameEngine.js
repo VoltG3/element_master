@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useInput } from './useInput';
 import { findItemById } from '../engine/registry';
-import { checkHazardDamage, spawnProjectile as spawnProjectileExternal, collectItem, updateProjectiles } from '../engine/gameplay';
+import { checkHazardDamage, spawnProjectile as spawnProjectileExternal, collectItem, checkInteractables, updateProjectiles } from '../engine/gameplay';
 import { playSfx } from '../engine/audio';
 import { updateFrame } from '../engine/loop/updateFrame';
 import { getLiquidAtPixel, isLiquidAtPixel as isLiquidAtPixelUtil, sampleLiquidForAABB } from '../engine/liquids/liquidUtils';
@@ -317,6 +317,8 @@ export const useGameEngine = (mapData, tileData, objectData, registryItems, onGa
             actions: {
                 collectItem: (x, y, mapWidth, objectLayer) =>
                     collectItem({ registryItems, TILE_SIZE, MAX_HEALTH, playShotSfx, onStateUpdate, gameState }, x, y, mapWidth, objectLayer),
+                checkInteractables: (x, y, mapWidth, objectLayer) =>
+                    checkInteractables({ registryItems, TILE_SIZE, MAX_HEALTH, playShotSfx, onStateUpdate, gameState }, x, y, mapWidth, objectLayer),
                 checkHazardDamage: (x, y, mapWidth, objectLayer, deltaMs) =>
                     checkHazardDamageWrapper(x, y, mapWidth, objectLayer, deltaMs),
                 spawnProjectile: (originX, originY, direction) =>

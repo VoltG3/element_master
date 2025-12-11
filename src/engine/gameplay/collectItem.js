@@ -21,6 +21,9 @@ export function collectItem(ctx, currentX, currentY, mapWidth, objectLayerData) 
   const itemDef = registryItems.find(r => r.id === itemId);
   if (!itemDef || !itemDef.pickup || itemId.includes('player')) return;
 
+  // Skip interactables - they are handled by checkInteractables()
+  if (itemDef.name && itemDef.name.startsWith('interactable.')) return;
+
   // Health pickup
   if (itemDef.effect && itemDef.effect.health) {
     const healthBonus = parseInt(itemDef.effect.health, 10);
