@@ -16,7 +16,7 @@ module.exports = {
     filename: isProduction ? 'static/js/[name].[contenthash:8].js' : 'static/js/[name].bundle.js',
     chunkFilename: isProduction ? 'static/js/[name].[contenthash:8].chunk.js' : 'static/js/[name].chunk.js',
     assetModuleFilename: 'static/media/[name].[hash][ext]',
-    publicPath: '/',
+    publicPath: isProduction ? '/element_master/' : '/',
   },
   devtool: isProduction ? 'source-map' : 'cheap-module-source-map',
   devServer: {
