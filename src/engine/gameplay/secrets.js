@@ -104,7 +104,22 @@ export function checkSecretDetection({
       // Found an unrevealed AboveSecret that player is touching!
       // Flood fill to find all connected tiles
       const connectedIndices = floodFillSecretZone(idx, secretMapData, mapWidth, mapHeight, registryItems);
-      return connectedIndices;
+
+      // Filter out already revealed indices to prevent infinite loop
+      const newIndices = connectedIndices.filter(i => !revealedSecrets || !revealedSecrets.includes(i));
+
+      console.log('[SECRETS] Revealing zone:', {
+        triggerIndex: idx,
+        triggerSecretId: secretId,
+        triggerSubtype: def.subtype,
+        totalConnected: connectedIndices.length,
+        newToReveal: newIndices.length,
+        firstFiveNew: newIndices.slice(0, 5),
+        connectedSecretIds: newIndices.slice(0, 5).map(i => secretMapData[i])
+      });
+
+      // Only return if there are NEW indices to reveal
+      return newIndices.length > 0 ? newIndices : null;
     }
   }
 
